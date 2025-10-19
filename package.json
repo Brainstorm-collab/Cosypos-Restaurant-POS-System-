@@ -1,18 +1,29 @@
 {
-  "name": "cors-proxy",
+  "name": "backend",
   "version": "1.0.0",
-  "description": "CORS Proxy Server for CosyPOS",
-  "main": "cors-proxy-server.js",
+  "description": "",
+  "main": "index.js",
   "scripts": {
-    "start": "node cors-proxy-server.js",
-    "dev": "node cors-proxy-server.js"
+    "dev": "node src/index.js",
+    "seed": "node src/seed.js",
+    "build": "npm install && node node_modules/prisma/build/index.js generate && node node_modules/prisma/build/index.js db push",
+    "prisma:generate": "node node_modules/prisma/build/index.js generate",
+    "prisma:push": "node node_modules/prisma/build/index.js db push"
   },
-  "dependencies": {
-    "express": "^5.1.0",
-    "cors": "^2.8.5",
-    "http-proxy-middleware": "^3.0.0"
-  },
-  "keywords": ["cors", "proxy", "api"],
+  "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@prisma/client": "^6.17.1",
+    "bcrypt": "^6.0.0",
+    "compression": "^1.7.4",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "prisma": "^6.17.1"
+  }
 }
