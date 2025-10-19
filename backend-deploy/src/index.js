@@ -82,6 +82,21 @@ app.use('/api/inventory', require('./routes/inventory'));
 // users routes
 app.use('/api/users', require('./routes/users'));
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+app.get('/api/health', (_req, res) => {
+  console.log('Health endpoint called');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.json({ ok: true, ts: new Date().toISOString() });
+});
+
+// Test CORS endpoint
+app.get('/api/cors-test', (_req, res) => {
+  console.log('CORS test endpoint called');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.json({ cors: 'working', timestamp: new Date().toISOString() });
+});
 const port = Number(process.env.PORT||4000);
 app.listen(port, () => console.log('API listening on http://localhost:'+port));
