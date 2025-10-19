@@ -99,13 +99,23 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 });
 
-// Test database connection and users
-app.get('/api/test-db', async (_req, res) => {
+// Create admin user manually
+app.post('/api/create-admin', async (_req, res) => {
   try {
     const { prisma } = require('./lib/prisma');
-    const userCount = await prisma.user.count();
-    const users = await prisma.user.findMany({
-      select: { email: true, role: true, name: true }
+    const bcrypt = require('bcrypt');
+    
+    const adminPassword = await bcrypt.hash('pass123', 10);
+    const admin = await prisma.user.upsert({
+      where: { email: 'admin@cosypos.app' },
+      update: {},
+      create: {
+        email: 'admin@cosypos.app',
+        passwordHash: adminPassword,
+        name: 'Admin User',
+        role: 'ADMIN',
+        phone: '+1234567890'
+      }
     });
     
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -113,9 +123,8 @@ app.get('/api/test-db', async (_req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
     res.json({ 
       success: true, 
-      userCount, 
-      users,
-      message: 'Database connection working'
+      message: 'Admin user created successfully',
+      user: { email: admin.email, role: admin.role, name: admin.name }
     });
   } catch (error) {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -124,7 +133,7 @@ app.get('/api/test-db', async (_req, res) => {
     res.status(500).json({ 
       success: false, 
       error: error.message,
-      message: 'Database connection failed'
+      message: 'Failed to create admin user'
     });
   }
 });
