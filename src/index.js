@@ -138,6 +138,84 @@ app.post('/api/create-admin', async (_req, res) => {
   }
 });
 
+// Create staff user manually
+app.post('/api/create-staff', async (_req, res) => {
+  try {
+    const { prisma } = require('./lib/prisma');
+    const bcrypt = require('bcrypt');
+    
+    const staffPassword = await bcrypt.hash('staff123', 10);
+    const staff = await prisma.user.upsert({
+      where: { email: 'staff@cosypos.app' },
+      update: {},
+      create: {
+        email: 'staff@cosypos.app',
+        passwordHash: staffPassword,
+        name: 'Staff User',
+        role: 'STAFF',
+        phone: '+1234567891'
+      }
+    });
+    
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.json({ 
+      success: true, 
+      message: 'Staff user created successfully',
+      user: { email: staff.email, role: staff.role, name: staff.name }
+    });
+  } catch (error) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      message: 'Failed to create staff user'
+    });
+  }
+});
+
+// Create customer user manually
+app.post('/api/create-customer', async (_req, res) => {
+  try {
+    const { prisma } = require('./lib/prisma');
+    const bcrypt = require('bcrypt');
+    
+    const customerPassword = await bcrypt.hash('customer123', 10);
+    const customer = await prisma.user.upsert({
+      where: { email: 'customer@cosypos.app' },
+      update: {},
+      create: {
+        email: 'customer@cosypos.app',
+        passwordHash: customerPassword,
+        name: 'Customer User',
+        role: 'USER',
+        phone: '+1234567892'
+      }
+    });
+    
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.json({ 
+      success: true, 
+      message: 'Customer user created successfully',
+      user: { email: customer.email, role: customer.role, name: customer.name }
+    });
+  } catch (error) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      message: 'Failed to create customer user'
+    });
+  }
+});
+
 // Test CORS endpoint
 app.get('/api/cors-test', (_req, res) => {
   console.log('CORS test endpoint called');
