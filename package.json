@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "node src/index.js",
     "seed": "node src/seed.js",
-    "build": "npm install && npx prisma generate && npx prisma db push",
-    "prisma:generate": "npx prisma generate",
-    "prisma:push": "npx prisma db push"
+    "build": "npm install && node node_modules/prisma/build/index.js generate && node node_modules/prisma/build/index.js db push",
+    "prisma:generate": "node node_modules/prisma/build/index.js generate",
+    "prisma:push": "node node_modules/prisma/build/index.js db push"
   },
   "keywords": [],
   "author": "",
