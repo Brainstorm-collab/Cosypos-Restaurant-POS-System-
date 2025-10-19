@@ -99,6 +99,36 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 });
 
+// Test database connection and users
+app.get('/api/test-db', async (_req, res) => {
+  try {
+    const { prisma } = require('./lib/prisma');
+    const userCount = await prisma.user.count();
+    const users = await prisma.user.findMany({
+      select: { email: true, role: true, name: true }
+    });
+    
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.json({ 
+      success: true, 
+      userCount, 
+      users,
+      message: 'Database connection working'
+    });
+  } catch (error) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      message: 'Database connection failed'
+    });
+  }
+});
+
 // Test CORS endpoint
 app.get('/api/cors-test', (_req, res) => {
   console.log('CORS test endpoint called');
