@@ -6,6 +6,20 @@ const { requireAnyAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Add CORS headers to all auth routes
+router.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'false');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  next();
+});
+
 function signToken(user) {
   const payload = { id: user.id, role: user.role, email: user.email };
   return jwt.sign(payload, process.env.JWT_SECRET || 'change-me', { expiresIn: '7d' });
