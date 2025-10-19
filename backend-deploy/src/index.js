@@ -14,27 +14,28 @@ app.use(helmet({
   contentSecurityPolicy: process.env.NODE_ENV === 'development' ? false : undefined,
   crossOriginEmbedderPolicy: process.env.NODE_ENV === 'development' ? false : undefined
 }));
-// Simple CORS configuration - allow all origins for now
+// AGGRESSIVE CORS FIX - Allow everything
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
+  res.header('Access-Control-Allow-Credentials', 'false');
+  res.header('Access-Control-Max-Age', '86400');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  next();
+});
+
+// Also use cors middleware as backup
 app.use(cors({
   origin: '*',
   credentials: false,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cache-Control', 'Pragma']
 }));
-
-// Manual CORS headers for preflight requests
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
-  } else {
-    next();
-  }
-});
 
 // Optimize JSON parsing
 app.use(express.json({ limit: '10mb' }));
@@ -47,6 +48,14 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
   lastModified: true
 }));
 
+
+// Handle OPTIONS requests for auth routes specifically
+app.options('/api/auth/*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.status(200).end();
+});
 
 // auth routes
 app.use('/api/auth', require('./routes/auth'));
