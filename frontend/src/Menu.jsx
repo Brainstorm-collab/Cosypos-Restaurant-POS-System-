@@ -57,6 +57,7 @@ export default function Menu() {
   const [editingCategoryData, setEditingCategoryData] = useState(null)
   const [categoryImageFile, setCategoryImageFile] = useState(null)
   const [categoryImagePreview, setCategoryImagePreview] = useState(null)
+  const [isUploading, setIsUploading] = useState(false)
   const [newCategoryForm, setNewCategoryForm] = useState({
     name: '',
     image: null
@@ -780,12 +781,40 @@ export default function Menu() {
                     name: editFormData.name,
                     description: editFormData.description,
                     price: `$${parseFloat(editFormData.price).toFixed(2)}`,
+                    category: editFormData.category,
+                    stock: parseInt(editFormData.stock),
+                    availability: editFormData.availability
+                  }
+                : item
+            ))
+            
+            // Update centralized data sync for real-time updates
+            dataSync.updateMenuItem(editingItem, {
+              name: editFormData.name,
+              description: editFormData.description,
+              price: `$${parseFloat(editFormData.price).toFixed(2)}`,
               category: editFormData.category,
               stock: parseInt(editFormData.stock),
               availability: editFormData.availability
-            }
-          : item
-      ))
+            });
+            
+            // Dispatch global event for real-time updates
+            const updatedMenuItems = menuItemsData.map(item => 
+              item.id === editingItem 
+                ? {
+                    ...item,
+                    name: editFormData.name,
+                    description: editFormData.description,
+                    price: `$${parseFloat(editFormData.price).toFixed(2)}`,
+                    category: editFormData.category,
+                    stock: parseInt(editFormData.stock),
+                    availability: editFormData.availability
+                  }
+                : item
+            );
+            window.dispatchEvent(new CustomEvent('cosypos-data-update', {
+              detail: { type: 'menuItems', data: updatedMenuItems }
+            }));
           }
         }
         
@@ -947,15 +976,21 @@ export default function Menu() {
   const handleAddCategorySubmit = async () => {
     if (newCategoryForm.name.trim()) {
       try {
+        setIsUploading(true);
         let imageUrl = null;
         
         // Upload image if provided
         if (categoryImageFile) {
           try {
+            console.log('Uploading category image:', categoryImageFile.name);
             const uploadResult = await uploadCategoryImage(categoryImageFile);
             imageUrl = uploadResult.imageUrl;
+            console.log('Category image uploaded successfully:', imageUrl);
           } catch (error) {
+            console.error('Image upload failed:', error);
             console.warn('Image upload failed, creating category without image:', error);
+            // Show user-friendly error message
+            alert('Image upload failed. Category will be created without image.');
           }
         }
         
@@ -982,10 +1017,20 @@ export default function Menu() {
           return calculateCategoryCounts(updated, menuItemsData);
         });
         
+        // Update centralized data sync for real-time updates
+        dataSync.updateData('categories', [...categoriesData, formattedCategory]);
+        
+        // Dispatch global event for real-time updates
+        window.dispatchEvent(new CustomEvent('cosypos-data-update', {
+          detail: { type: 'categories', data: [...categoriesData, formattedCategory] }
+        }));
+        
         handleCloseModals();
       } catch (error) {
         console.error('Error creating category:', error);
         alert('Failed to create category. Please try again.');
+      } finally {
+        setIsUploading(false);
       }
     }
   }
@@ -1013,10 +1058,30 @@ export default function Menu() {
   const handleCategoryImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file.');
+        e.target.value = ''; // Clear the input
+        return;
+      }
+      
+      // Validate file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB.');
+        e.target.value = ''; // Clear the input
+        return;
+      }
+      
+      console.log('Category image file selected:', file.name, file.type, file.size);
       setCategoryImageFile(file);
       const reader = new FileReader();
-      reader.onload = (e) => setCategoryImagePreview(e.target.result);
+      reader.onload = (e) => {
+        setCategoryImagePreview(e.target.result);
+        console.log('Category image preview set');
+      };
       reader.readAsDataURL(file);
+    } else {
+      console.log('No file selected');
     }
   }
 
@@ -1059,6 +1124,17 @@ export default function Menu() {
           );
           return calculateCategoryCounts(updated, menuItemsData);
         });
+        
+        // Update centralized data sync for real-time updates
+        const updatedCategories = categoriesData.map(cat => 
+          cat.id === editingCategoryData.id ? formattedCategory : cat
+        );
+        dataSync.updateData('categories', updatedCategories);
+        
+        // Dispatch global event for real-time updates
+        window.dispatchEvent(new CustomEvent('cosypos-data-update', {
+          detail: { type: 'categories', data: updatedCategories }
+        }));
         
         handleCloseModals();
       } catch (error) {
@@ -1806,18 +1882,20 @@ export default function Menu() {
               </button>
               <button
                 onClick={handleAddCategorySubmit}
+                disabled={isUploading}
                 style={{
                   padding: '10px 20px',
-                  background: colors.accent,
+                  background: isUploading ? '#666' : colors.accent,
                   border: 'none',
                   borderRadius: 8,
                   color: '#333',
-                  cursor: 'pointer',
+                  cursor: isUploading ? 'not-allowed' : 'pointer',
                   fontSize: 14,
-                  fontWeight: 500
+                  fontWeight: 500,
+                  opacity: isUploading ? 0.7 : 1
                 }}
               >
-                Add Category
+                {isUploading ? 'Creating...' : 'Add Category'}
               </button>
             </div>
           </div>
