@@ -1,226 +1,150 @@
-# COSYPOS - Modern Point of Sale System
+# CosyPOS - Restaurant Management System
 
-![COSYPOS Demo](https://raw.githubusercontent.com/Brainstorm-collab/cosypos/master/public/demo-cosypos.png)
+A modern, full-stack restaurant management system built with React and Node.js, featuring PostgreSQL database integration and comprehensive role-based access control.
 
-**COSYPOS** is a comprehensive, modern Point of Sale (POS) system designed for restaurants and food service businesses. Built with React, Node.js, and SQLite, it provides a complete solution for managing orders, inventory, staff, reservations, and business analytics.
+## 🏗️ Project Structure
 
-## 🚀 Features
+```
+cosypos/
+├── backend-deploy/          # Backend deployment files
+│   ├── src/                 # Backend source code
+│   ├── prisma/              # Database schema
+│   ├── uploads/             # File uploads (images)
+│   └── package.json         # Backend dependencies
+│
+├── frontend-deploy/         # Frontend deployment files
+│   ├── src/                 # React components
+│   ├── public/              # Static assets
+│   └── package.json         # Frontend dependencies
+│
+├── docs/                    # Documentation
+├── scripts/                 # Utility scripts
+└── deployment/              # Deployment configurations
+```
 
-### 📊 Dashboard & Analytics
-- **Real-time Dashboard** with key performance indicators
-- **Daily Sales Tracking** with visual charts
-- **Monthly Revenue Reports** with trend analysis
-- **Table Occupancy Monitoring** for optimal seating management
-- **Popular Dishes Analytics** with stock status tracking
-
-### 🍽️ Menu Management
-- **Dynamic Menu System** with categories and items
-- **Price Management** with flexible pricing options
-- **Availability Control** for real-time menu updates
-- **Stock Integration** linking menu items to inventory
-
-### 👥 Staff Management
-- **Role-based Access Control** (Admin, Staff, User)
-- **Staff Attendance Tracking** with clock-in/out functionality
-- **Break Time Management** for accurate payroll
-- **Staff Performance Analytics**
-
-### 📦 Inventory Management
-- **Real-time Stock Tracking** with SKU management
-- **Par Level Monitoring** for automatic reorder alerts
-- **Cost Tracking** for profit margin analysis
-- **Unit Management** for different measurement types
-
-### 🍴 Order Management
-- **Table-based Ordering** with visual table status
-- **Order Status Tracking** (Pending, In Progress, Served, Paid, Cancelled)
-- **Payment Processing** with multiple payment methods
-- **Order History** and analytics
-
-### 📅 Reservation System
-- **Table Reservation Management** with time slots
-- **Customer Information Tracking**
-- **Reservation Status Management** (Pending, Confirmed, Cancelled, No Show)
-- **Table Assignment** and conflict prevention
-
-### 📈 Reports & Analytics
-- **Sales Reports** with filtering options (Daily, Weekly, Monthly)
-- **Revenue Analytics** with export capabilities
-- **Staff Performance Reports**
-- **Inventory Reports** with cost analysis
-
-### 🔔 Notifications
-- **Real-time Notifications** for orders, reservations, and alerts
-- **Multi-channel Notifications** (in-app, email, SMS)
-- **Customizable Notification Settings**
-
-## 🛠️ Technology Stack
-
-### Frontend
-- **React 19** - Modern React with latest features
-- **Vite** - Fast build tool and development server
-- **React Router DOM** - Client-side routing
-- **Lucide React** - Beautiful icon library
-- **Recharts** - Data visualization and charts
-- **React Icons** - Additional icon components
-
-### Backend
-- **Node.js** - JavaScript runtime
-- **Express.js** - Web application framework
-- **Prisma** - Modern database ORM
-- **SQLite** - Lightweight database
-- **JWT** - JSON Web Tokens for authentication
-- **bcrypt** - Password hashing
-- **CORS** - Cross-origin resource sharing
-
-### Database Schema
-The system uses a comprehensive SQLite schema with the following main entities:
-- **Users** - Authentication and role management
-- **Menu Categories & Items** - Menu structure
-- **Inventory Items** - Stock management
-- **Tables** - Restaurant table management
-- **Orders & Order Items** - Order processing
-- **Reservations** - Booking management
-- **Attendance** - Staff time tracking
-- **Payments** - Transaction processing
-- **Notifications** - Alert system
-
-## 🚀 Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js (v18 or higher)
-- SQLite database
-- npm or yarn package manager
+- Node.js 22.16.0+
+- PostgreSQL database
+- Git
 
-### Installation
+### Local Development
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/Brainstorm-collab/cosypos.git
-   cd cosypos
+   git clone https://github.com/Brainstorm-collab/cosyposy-duplicate.git
+   cd cosyposy-duplicate
    ```
 
-2. **Install Backend Dependencies**
+2. **Setup Backend**
    ```bash
-   cd backend
+   cd backend-deploy
    npm install
-   ```
-
-3. **Install Frontend Dependencies**
-   ```bash
-   cd ../frontend
-   npm install
-   ```
-
-4. **Database Setup**
-   ```bash
-   cd ../backend
+   cp .env.example .env  # Configure your database
    npx prisma generate
    npx prisma db push
-   ```
-
-5. **Environment Configuration**
-   Create a `.env` file in the backend directory:
-   ```env
-   DATABASE_URL="file:./dev.db"
-   JWT_SECRET="your-jwt-secret-key"
-   ```
-
-### Running the Application
-
-1. **Start the Backend Server**
-   ```bash
-   cd backend
+   npm run seed
    npm run dev
    ```
 
-2. **Start the Frontend Development Server**
+3. **Setup Frontend**
    ```bash
-   cd frontend
+   cd frontend-deploy
+   npm install
+   cp .env.example .env  # Configure API URL
    npm run dev
    ```
 
-3. **Access the Application**
-   - Frontend: http://localhost:5173
-   - Backend API: http://localhost:3000
+## 🌐 Deployment
 
-## 📱 User Interface
+### Render.com Deployment
 
-The application features a modern, dark-themed interface with:
-- **Responsive Design** - Works on desktop, tablet, and mobile
-- **Dark Theme** with pink accent colors for better user experience
-- **Intuitive Navigation** with sidebar menu
-- **Real-time Updates** with live data synchronization
-- **Professional Dashboard** with key metrics and charts
+#### Backend Service Configuration:
+- **Service Type:** Web Service
+- **Root Directory:** `backend-deploy`
+- **Build Command:** `npm install && npx prisma generate && npx prisma db push && node src/seed.js`
+- **Start Command:** `npm run dev`
+- **Node Version:** 22.16.0
 
-## 🔐 Authentication & Security
+#### Frontend Service Configuration:
+- **Service Type:** Static Site
+- **Root Directory:** `frontend-deploy`
+- **Build Command:** `npm install && npm run build`
+- **Publish Directory:** `dist`
+- **Node Version:** 22.16.0
 
-- **JWT-based Authentication** for secure user sessions
-- **Role-based Access Control** with different permission levels
-- **Password Hashing** using bcrypt for security
-- **Protected Routes** ensuring only authenticated users can access features
+### Environment Variables
 
-## 📊 Key Metrics Dashboard
-
-The dashboard provides real-time insights into:
-- **Daily Sales** - Current day revenue tracking
-- **Monthly Revenue** - Monthly performance analysis
-- **Table Occupancy** - Current table status and capacity
-- **Popular Dishes** - Best-selling items with stock status
-- **Export Functionality** - Data export in multiple formats
-
-## 🎯 Target Users
-
-- **Restaurant Owners** - Complete business management
-- **Restaurant Managers** - Staff and inventory oversight
-- **Wait Staff** - Order taking and table management
-- **Kitchen Staff** - Order processing and inventory updates
-
-## 🔄 Development
-
-### Project Structure
+#### Backend:
 ```
-cosypos/
-├── backend/           # Node.js/Express API
-│   ├── src/
-│   │   ├── routes/   # API endpoints
-│   │   ├── middleware/ # Authentication & validation
-│   │   └── lib/      # Database connection
-│   └── prisma/       # Database schema & migrations
-└── frontend/         # React application
-    ├── src/
-    │   ├── components/ # React components
-    │   └── pages/     # Page components
-    └── public/       # Static assets
+DATABASE_URL=postgresql://user:password@host:port/database
+JWT_SECRET=your-jwt-secret
+NODE_ENV=production
+PORT=4000
 ```
 
-### Available Scripts
+#### Frontend:
+```
+VITE_API_URL=https://your-backend-url.onrender.com
+```
 
-**Frontend:**
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
+## 👥 User Roles
 
-**Backend:**
-- `npm run dev` - Start development server
+- **Admin:** Full system access
+- **Staff:** Limited access to orders, reservations, inventory
+- **Customer:** View menu, place orders, make reservations
+
+### Default Login Credentials:
+- **Admin:** admin@cosypos.app / pass123
+- **Staff:** staff@cosypos.app / staff123
+- **Customer:** customer@cosypos.app / customer123
+
+## 📚 Documentation
+
+- [Customer Role Documentation](docs/CUSTOMER_ROLE_DOCUMENTATION.md)
+- [Staff Role Documentation](docs/STAFF_ROLE_DOCUMENTATION.md)
+- [Performance Optimizations](docs/PERFORMANCE_OPTIMIZATIONS.md)
+
+## 🛠️ Features
+
+- **User Management:** Role-based access control
+- **Menu Management:** Dynamic menu with categories
+- **Order Processing:** Complete order workflow
+- **Inventory Management:** Stock tracking and alerts
+- **Reservation System:** Table booking and management
+- **Staff Management:** Employee tracking and attendance
+- **Reports & Analytics:** Comprehensive reporting
+- **File Uploads:** Profile images and menu items
+- **Real-time Updates:** Live data synchronization
+
+## 🗄️ Database
+
+- **PostgreSQL** for production
+- **Prisma ORM** for database operations
+- **Automatic migrations** and seeding
+
+## 🔧 Technology Stack
+
+- **Frontend:** React 19, Vite, React Router
+- **Backend:** Node.js, Express, Prisma
+- **Database:** PostgreSQL
+- **Authentication:** JWT
+- **File Upload:** Multer
+- **Deployment:** Render.com
+
+## 📝 License
+
+This project is licensed under the MIT License.
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
-## 📄 License
+## 📞 Support
 
-This project is licensed under the ISC License - see the package.json files for details.
-
-## 🆘 Support
-
-For support and questions, please open an issue in the repository or contact the development team.
-
----
-
-**COSYPOS** - Modernizing restaurant management with technology.
+For support and questions, please contact the development team.
