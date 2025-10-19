@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node src/index.js",
     "seed": "node src/seed.js",
+    "build": "npm install && npx prisma generate && npx prisma db push",
     "prisma:generate": "npx prisma generate",
     "prisma:push": "npx prisma db push"
   },
