@@ -216,6 +216,78 @@ app.post('/api/create-customer', async (_req, res) => {
   }
 });
 
+// Create all users at once
+app.post('/api/create-all-users', async (_req, res) => {
+  try {
+    const { prisma } = require('./lib/prisma');
+    const bcrypt = require('bcrypt');
+    
+    // Create admin user
+    const adminPassword = await bcrypt.hash('pass123', 10);
+    const admin = await prisma.user.upsert({
+      where: { email: 'admin@cosypos.app' },
+      update: {},
+      create: {
+        email: 'admin@cosypos.app',
+        passwordHash: adminPassword,
+        name: 'Admin User',
+        role: 'ADMIN',
+        phone: '+1234567890'
+      }
+    });
+    
+    // Create staff user
+    const staffPassword = await bcrypt.hash('staff123', 10);
+    const staff = await prisma.user.upsert({
+      where: { email: 'staff@cosypos.app' },
+      update: {},
+      create: {
+        email: 'staff@cosypos.app',
+        passwordHash: staffPassword,
+        name: 'Staff User',
+        role: 'STAFF',
+        phone: '+1234567891'
+      }
+    });
+    
+    // Create customer user
+    const customerPassword = await bcrypt.hash('customer123', 10);
+    const customer = await prisma.user.upsert({
+      where: { email: 'customer@cosypos.app' },
+      update: {},
+      create: {
+        email: 'customer@cosypos.app',
+        passwordHash: customerPassword,
+        name: 'Customer User',
+        role: 'USER',
+        phone: '+1234567892'
+      }
+    });
+    
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.json({ 
+      success: true, 
+      message: 'All users created successfully',
+      users: [
+        { email: admin.email, role: admin.role, name: admin.name },
+        { email: staff.email, role: staff.role, name: staff.name },
+        { email: customer.email, role: customer.role, name: customer.name }
+      ]
+    });
+  } catch (error) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      message: 'Failed to create users'
+    });
+  }
+});
+
 // Test CORS endpoint
 app.get('/api/cors-test', (_req, res) => {
   console.log('CORS test endpoint called');
