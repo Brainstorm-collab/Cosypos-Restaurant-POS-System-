@@ -44,7 +44,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
 
 
 // Handle OPTIONS requests for auth routes specifically
-app.options('/api/auth/*', (req, res) => {
+app.options('/api/auth/:path*', (req, res) => {
   console.log('OPTIONS request for auth route');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
