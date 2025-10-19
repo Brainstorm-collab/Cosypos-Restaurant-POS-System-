@@ -11,6 +11,26 @@ import { onInventoryUpdate } from './inventorySync'
 import dataSync from './dataSync'
 import { PizzaIcon, BurgerIcon, ChickenIcon, BakeryIcon, BeverageIcon, SeafoodIcon, getCategoryIcon, getCategoryImage } from './Categories.jsx'
 
+// Helper function to construct proper image URLs
+const getImageUrl = (imagePath) => {
+  if (!imagePath) return '/placeholder-food.jpg'
+  
+  // If it's already a full URL, return as is
+  if (imagePath.startsWith('http')) return imagePath
+  
+  // If it's a relative path starting with /uploads, construct full URL
+  if (imagePath.startsWith('/uploads/')) {
+    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+    return `${baseUrl}${imagePath}`
+  }
+  
+  // If it's a relative path not starting with /uploads, assume it's in public folder
+  if (imagePath.startsWith('/')) return imagePath
+  
+  // For other cases, return as is (might be a data URL or other format)
+  return imagePath
+}
+
 // Static icons array for cycling - defined outside component to prevent recreation
 const AVAILABLE_ICONS = [
   { name: 'PizzaIcon', component: PizzaIcon },
@@ -674,154 +694,85 @@ export default function Menu() {
         // Find the original item to get the API ID
         const originalItem = menuItemsData.find(item => item.id === editingItem)
         if (originalItem && originalItem.apiId) {
-          const updateData = {
-            name: editFormData.name,
-            description: editFormData.description,
-            priceCents: Math.round(parseFloat(editFormData.price) * 100),
-            stock: parseInt(editFormData.stock),
-            availability: editFormData.availability,
-            category: editFormData.category
-          }
+          let imageUrl = originalItem.image // Keep existing image by default
           
           // Handle image upload if new image is selected
           if (editImageFile) {
             try {
-              const formData = new FormData()
-              formData.append('image', editImageFile)
-              formData.append('menuItemData', JSON.stringify(updateData))
-              
-              // Try to upload image and update menu item
-              const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/menu-items/${originalItem.apiId}/image`, {
-                method: 'PUT',
-                headers: {
-                  'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: formData
-              })
-              
-              if (!response.ok) {
-                console.warn('Image upload endpoint not available, storing image locally')
-                // Fallback: Store image in localStorage and update menu item
-                const imageKey = `menu_item_image_${originalItem.apiId}`
-                localStorage.setItem(imageKey, editImagePreview)
-                
-                await updateMenuItem(originalItem.apiId, updateData)
-                
-                // Update local state with new image using standardized format
-                const updatedItem = dataSync.standardizeMenuItem({
-                  ...originalItem,
-                  name: editFormData.name,
-                  description: editFormData.description,
-                  price: `$${parseFloat(editFormData.price).toFixed(2)}`,
-                  category: editFormData.category,
-                  stock: parseInt(editFormData.stock),
-                  availability: editFormData.availability,
-                  image: editImagePreview // Use the new image
-                });
-                
-                setMenuItemsData(prev => prev.map(item => 
-                  item.id === editingItem ? updatedItem : item
-                ));
-                
-                // Update centralized data sync
-                dataSync.updateMenuItem(editingItem, updatedItem);
-              } else {
-                const updatedItem = await response.json()
-                
-                // Update local state with new image
-                setMenuItemsData(prev => prev.map(item => 
-                  item.id === editingItem 
-                    ? {
-                        ...item,
-                        name: updatedItem.name,
-                        description: updatedItem.description,
-                        price: `$${(updatedItem.priceCents / 100).toFixed(2)}`,
-                        stock: updatedItem.stock,
-                        category: updatedItem.category?.name || editFormData.category,
-                        availability: updatedItem.availability,
-                        image: updatedItem.image || item.image
-                      }
-                    : item
-                ))
+              // Upload image first using the proper API endpoint
+              const uploadResponse = await uploadMenuItemImage(editImageFile)
+              if (uploadResponse.success && uploadResponse.imageUrl) {
+                imageUrl = uploadResponse.imageUrl
               }
             } catch (error) {
-              console.warn('Image upload failed, storing image locally:', error)
-              // Fallback: Store image in localStorage and update menu item
-              const imageKey = `menu_item_image_${originalItem.apiId}`
-              localStorage.setItem(imageKey, editImagePreview)
-              
-              await updateMenuItem(originalItem.apiId, updateData)
-              
-              // Update local state with new image
-              setMenuItemsData(prev => prev.map(item => 
-                item.id === editingItem 
-                  ? {
-                      ...item,
-                      name: editFormData.name,
-                      description: editFormData.description,
-                      price: `$${parseFloat(editFormData.price).toFixed(2)}`,
-                      category: editFormData.category,
-                      stock: parseInt(editFormData.stock),
-                      availability: editFormData.availability,
-                      image: editImagePreview // Use the new image
-                    }
-                  : item
-              ))
+              console.error('Image upload failed:', error)
+              // Continue without image update if upload fails
             }
-          } else {
-            // Update via API without image change
-            await updateMenuItem(originalItem.apiId, updateData)
-            
-            // Update local state
-            setMenuItemsData(prev => prev.map(item => 
-              item.id === editingItem 
-                ? {
-                    ...item,
-                    name: editFormData.name,
-                    description: editFormData.description,
-                    price: `$${parseFloat(editFormData.price).toFixed(2)}`,
-              category: editFormData.category,
-              stock: parseInt(editFormData.stock),
-              availability: editFormData.availability
-            }
-          : item
-      ))
           }
+          
+          // Prepare update data with correct field names for backend
+          const updateData = {
+            name: editFormData.name,
+            description: editFormData.description,
+            price: editFormData.price, // Backend expects price as string, not priceCents
+            stock: parseInt(editFormData.stock),
+            availability: editFormData.availability,
+            category: editFormData.category,
+            image: imageUrl
+          }
+          
+          // Update menu item via API
+          const updatedItem = await updateMenuItem(originalItem.apiId, updateData)
+          
+          // Update local state with the response from backend
+          setMenuItemsData(prev => prev.map(item => 
+            item.id === editingItem 
+              ? {
+                  ...item,
+                  name: updatedItem.name,
+                  description: updatedItem.description,
+                  price: `$${(updatedItem.priceCents / 100).toFixed(2)}`,
+                  stock: updatedItem.stock,
+                  category: updatedItem.category?.name || editFormData.category,
+                  availability: updatedItem.availability,
+                  image: updatedItem.image || item.image
+                }
+              : item
+          ))
+          
+          // Update centralized data sync
+          dataSync.updateMenuItem(editingItem, {
+            ...originalItem,
+            name: updatedItem.name,
+            description: updatedItem.description,
+            price: `$${(updatedItem.priceCents / 100).toFixed(2)}`,
+            stock: updatedItem.stock,
+            category: updatedItem.category?.name || editFormData.category,
+            availability: updatedItem.availability,
+            image: updatedItem.image || item.image
+          })
         }
         
-      setEditingItem(null)
-      setEditFormData({})
-        setEditImageFile(null)
-        setEditImagePreview(null)
-        setIsEditMenuItemModalOpen(false)
-      } catch (error) {
-        console.error('Error updating menu item:', error)
-        // Still update local state even if API fails
-        setMenuItemsData(prev => prev.map(item => 
-          item.id === editingItem 
-            ? {
-                ...item,
-                name: editFormData.name,
-                description: editFormData.description,
-                price: `$${parseFloat(editFormData.price).toFixed(2)}`,
-                category: editFormData.category,
-                stock: parseInt(editFormData.stock),
-                availability: editFormData.availability,
-                image: editImagePreview || item.image
-              }
-            : item
-        ))
+        // Close modal and reset state
         setEditingItem(null)
         setEditFormData({})
         setEditImageFile(null)
         setEditImagePreview(null)
         setIsEditMenuItemModalOpen(false)
         
-        // Only refresh if no image upload was attempted or if image upload was successful
-        if (!editImageFile) {
-          // Refresh menu items from API to ensure data consistency
-          await fetchMenuItems()
-        }
+        // Refresh menu items to ensure data consistency
+        await fetchMenuItems()
+        
+      } catch (error) {
+        console.error('Error updating menu item:', error)
+        alert('Failed to update menu item. Please try again.')
+        
+        // Reset modal state on error
+        setEditingItem(null)
+        setEditFormData({})
+        setEditImageFile(null)
+        setEditImagePreview(null)
+        setIsEditMenuItemModalOpen(false)
       }
     }
   }
@@ -842,19 +793,27 @@ export default function Menu() {
         if (originalItem && originalItem.apiId) {
           // Delete via API
           await deleteMenuItem(originalItem.apiId)
+          
+          // Update local state
+          setMenuItemsData(prev => prev.filter(item => item.id !== itemId));
+          setSelectedItems(prev => prev.filter(id => id !== itemId));
+          
+          // Update centralized data sync
+          dataSync.removeMenuItem(itemId);
+          
+          // Refresh menu items from API to ensure data consistency
+          await fetchMenuItems()
+          
+          alert('Menu item deleted successfully!')
+        } else {
+          // Fallback: just remove from local state if no API ID
+          setMenuItemsData(prev => prev.filter(item => item.id !== itemId))
+          setSelectedItems(prev => prev.filter(id => id !== itemId))
+          dataSync.removeMenuItem(itemId)
         }
-        
-        // Update local state
-        setMenuItemsData(prev => prev.filter(item => item.id !== itemId));
-        setSelectedItems(prev => prev.filter(id => id !== itemId));
-        
-        // Update centralized data sync
-        dataSync.removeMenuItem(itemId);
       } catch (error) {
         console.error('Error deleting menu item:', error)
-        // Still update local state even if API fails
-      setMenuItemsData(prev => prev.filter(item => item.id !== itemId))
-      setSelectedItems(prev => prev.filter(id => id !== itemId))
+        alert('Failed to delete menu item. Please try again.')
       }
     }
   }
@@ -1101,14 +1060,29 @@ export default function Menu() {
   const handleAddMenuItemSubmit = async () => {
     if (addMenuItemForm.name.trim() && addMenuItemForm.price && addMenuItemForm.category) {
       try {
+        let imageUrl = null
+        
+        // Handle image upload if image is selected
+        if (addImageFile) {
+          try {
+            const uploadResponse = await uploadMenuItemImage(addImageFile)
+            if (uploadResponse.success && uploadResponse.imageUrl) {
+              imageUrl = uploadResponse.imageUrl
+            }
+          } catch (error) {
+            console.error('Image upload failed:', error)
+            // Continue without image if upload fails
+          }
+        }
+        
         const newMenuItemData = {
           name: addMenuItemForm.name,
           description: addMenuItemForm.description,
-          priceCents: Math.round(parseFloat(addMenuItemForm.price) * 100),
+          price: addMenuItemForm.price, // Backend expects price as string, not priceCents
           stock: parseInt(addMenuItemForm.stock) || 0,
           category: addMenuItemForm.category,
           availability: addMenuItemForm.availability,
-          active: true
+          image: imageUrl
         }
         
         // Create via API
@@ -1126,23 +1100,25 @@ export default function Menu() {
         // Update centralized data sync
         dataSync.addMenuItem(newMenuItem);
         
+        // Reset form and close modal
+        setAddMenuItemForm({
+          name: '',
+          description: '',
+          price: '',
+          category: '',
+          stock: '',
+          availability: 'In Stock'
+        })
+        setAddImageFile(null)
+        setAddImagePreview(null)
         handleCloseModals();
+        
+        // Refresh menu items to ensure data consistency
+        await fetchMenuItems()
+        
       } catch (error) {
         console.error('Error creating menu item:', error)
-        // Still add to local state even if API fails
-      const newMenuItem = {
-        id: `#${Date.now()}`,
-        name: addMenuItemForm.name,
-        description: addMenuItemForm.description,
-          image: '/chicken-parmesan.png',
-        stock: parseInt(addMenuItemForm.stock) || 0,
-        category: addMenuItemForm.category,
-        price: `$${parseFloat(addMenuItemForm.price).toFixed(2)}`,
-        availability: addMenuItemForm.availability,
-        active: true
-      }
-      setMenuItemsData(prev => [...prev, newMenuItem])
-      handleCloseModals()
+        alert('Failed to create menu item. Please try again.')
       }
     }
   }
@@ -1478,7 +1454,7 @@ export default function Menu() {
                       flexShrink: 0
                     }}>
                       <img 
-                        src={item.image} 
+                        src={getImageUrl(item.image)} 
                         alt={item.name}
                         loading="lazy"
                         key={`${item.id}-${item.image}`}
@@ -2176,7 +2152,7 @@ export default function Menu() {
                   if (currentItem && currentItem.image) {
                     return (
                       <img 
-                        src={currentItem.image} 
+                        src={getImageUrl(currentItem.image)} 
                         alt={currentItem.name}
                         loading="lazy"
                         style={{
