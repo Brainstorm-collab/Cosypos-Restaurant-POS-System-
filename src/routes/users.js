@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const { requireAnyAuth } = require('../middleware/auth');
 const prisma = require('../db');
 
 // Get all users (admin only)
-router.get('/', auth, async (req, res) => {
+router.get('/', requireAnyAuth(), async (req, res) => {
   try {
     // Check if user has admin role
     if (req.user.role !== 'admin') {
@@ -32,7 +32,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // Get user by ID
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', requireAnyAuth(), async (req, res) => {
   try {
     const { id } = req.params;
     const parsedId = parseInt(id, 10);
@@ -73,7 +73,7 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // Update user role (admin only)
-router.put('/:id/role', auth, async (req, res) => {
+router.put('/:id/role', requireAnyAuth(), async (req, res) => {
   try {
     // Check if user has admin role
     if (req.user.role !== 'admin') {
@@ -116,7 +116,7 @@ router.put('/:id/role', auth, async (req, res) => {
   }
 });
 // Delete user (admin only)
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', requireAnyAuth(), async (req, res) => {
   try {
     // Check if user has admin role
     if (req.user.role !== 'admin') {
