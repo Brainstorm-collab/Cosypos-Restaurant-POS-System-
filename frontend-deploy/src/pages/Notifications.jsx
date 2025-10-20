@@ -237,7 +237,7 @@ export default function Notifications() {
               }}
             >
               <img 
-                src={user?.profileImage ? user.profileImage : "/profile img icon.jpg"} 
+                src={user?.profileImage ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${user.profileImage}` : "/profile img icon.jpg"} 
                 alt="Profile" 
                 style={{ 
                   width: '100%',
