@@ -69,73 +69,22 @@ app.use('/uploads', (req, res, next) => {
   next();
 });
 
-// Custom route for serving images with proper CORS headers
-app.get('/uploads/:path*', (req, res) => {
-  console.log('🖼️ Serving image:', req.url);
-  const filePath = path.join(__dirname, '../uploads', req.params.path);
-  
-  // Set permissive CORS headers BEFORE any other processing
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
-  res.setHeader('Access-Control-Allow-Credentials', 'false');
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
-  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-  
-  // Force remove any restrictive headers that might be set by Express
-  res.removeHeader('Cross-Origin-Resource-Policy');
-  res.removeHeader('Cross-Origin-Embedder-Policy');
-  res.removeHeader('Cross-Origin-Opener-Policy');
-  
-  // Set the correct headers again
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
-  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-  
-  // Log headers being set
-  console.log('📋 Headers being set:', {
-    'Cross-Origin-Resource-Policy': res.getHeader('Cross-Origin-Resource-Policy'),
-    'Cross-Origin-Embedder-Policy': res.getHeader('Cross-Origin-Embedder-Policy'),
-    'Cross-Origin-Opener-Policy': res.getHeader('Cross-Origin-Opener-Policy'),
-    'Access-Control-Allow-Origin': res.getHeader('Access-Control-Allow-Origin')
-  });
-  
-  // Serve the file
-  res.sendFile(filePath, (err) => {
-    if (err) {
-      console.error('Error serving file:', err);
-      res.status(404).send('File not found');
-    } else {
-      console.log('✅ File served successfully:', filePath);
-    }
-  });
-});
-
-// Alternative image serving endpoint
-app.get('/api/image/:path*', (req, res) => {
-  console.log('🖼️ Alternative image endpoint:', req.url);
-  const filePath = path.join(__dirname, '../uploads', req.params.path);
-  
-  // Set permissive CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
-  res.setHeader('Access-Control-Allow-Credentials', 'false');
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
-  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-  
-  // Serve the file
-  res.sendFile(filePath, (err) => {
-    if (err) {
-      console.error('Error serving file:', err);
-      res.status(404).send('File not found');
-    } else {
-      console.log('✅ File served successfully via alternative endpoint:', filePath);
-    }
-  });
-});
+// Static file serving for uploads with proper CORS headers
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
+  maxAge: '1d', // Cache images for 1 day
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, path) => {
+    // Set permissive CORS headers for images
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
+    res.setHeader('Access-Control-Allow-Credentials', 'false');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+    res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+  }
+}));
 
 
 // Handle OPTIONS requests for auth routes specifically
