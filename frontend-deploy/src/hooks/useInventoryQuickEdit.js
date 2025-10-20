@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useUser } from './UserContext';
+import { useUser } from '../pages/UserContext';
 
 export function useInventoryQuickEdit() {
   const { user } = useUser();

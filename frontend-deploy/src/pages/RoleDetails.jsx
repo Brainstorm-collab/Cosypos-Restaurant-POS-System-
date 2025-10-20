@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCurrentUser } from './api';
-import './animations.css';
+import { getCurrentUser } from '../utils/api';
+import '../styles/animations.css';
 
 const colors = {
   bg: '#111315',

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { FiEdit3 } from 'react-icons/fi'
-import { updateProfile, uploadProfileImage } from './api'
+import { updateProfile, uploadProfileImage } from '../utils/api'
 import { useUser } from './UserContext'
 
 const colors = {

@@ -17,17 +17,17 @@ if (typeof document !== 'undefined') {
 }
 
 // Lazy load heavy components
-export const LazyReports = lazy(() => import('./Reports.jsx'));
-export const LazyInventory = lazy(() => import('./Inventory.jsx'));
-export const LazyOrders = lazy(() => import('./Orders.jsx'));
-export const LazyMenu = lazy(() => import('./Menu.jsx'));
-export const LazyReservation = lazy(() => import('./Reservation.jsx'));
-export const LazyReservationDetails = lazy(() => import('./ReservationDetails.jsx'));
-export const LazyStaff = lazy(() => import('./Staff.jsx'));
-export const LazyStaffAttendance = lazy(() => import('./StaffAttendance.jsx'));
-export const LazyStaffDetail = lazy(() => import('./StaffDetail.jsx'));
-export const LazyProfile = lazy(() => import('./Profile.jsx'));
-export const LazyNotifications = lazy(() => import('./Notifications.jsx'));
+export const LazyReports = lazy(() => import('../pages/Reports.jsx'));
+export const LazyInventory = lazy(() => import('../pages/Inventory.jsx'));
+export const LazyOrders = lazy(() => import('../pages/Orders.jsx'));
+export const LazyMenu = lazy(() => import('../pages/Menu.jsx'));
+export const LazyReservation = lazy(() => import('../pages/Reservation.jsx'));
+export const LazyReservationDetails = lazy(() => import('../pages/ReservationDetails.jsx'));
+export const LazyStaff = lazy(() => import('../pages/Staff.jsx'));
+export const LazyStaffAttendance = lazy(() => import('../pages/StaffAttendance.jsx'));
+export const LazyStaffDetail = lazy(() => import('../pages/StaffDetail.jsx'));
+export const LazyProfile = lazy(() => import('../pages/Profile.jsx'));
+export const LazyNotifications = lazy(() => import('../pages/Notifications.jsx'));
 
 // Loading component
 export const LoadingSpinner = ({ message = "Loading..." }) => (

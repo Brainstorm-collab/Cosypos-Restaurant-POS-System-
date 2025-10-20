@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { getCurrentUser } from './api';
+import { getCurrentUser } from '../utils/api';
 import RestrictedAccess from './RestrictedAccess';
 
 export default function RoleProtectedRoute({ children, allowedRoles = [] }) {

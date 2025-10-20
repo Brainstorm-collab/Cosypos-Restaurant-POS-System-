@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useUser } from './UserContext';
-import { getMenuItems, updateMenuItem } from './api';
-import { emitInventoryUpdate } from './inventorySync';
+import { getMenuItems, updateMenuItem } from '../utils/api';
+import { emitInventoryUpdate } from '../utils/inventorySync';
 
 const colors = { 
   bg: '#111315', 

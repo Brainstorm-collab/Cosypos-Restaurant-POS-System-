@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCurrentUser } from './api';
+import { getCurrentUser } from '../utils/api';
 
 export default function TestRoleAccess() {
   const navigate = useNavigate();

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, ChevronDown, Users, Plus, ChevronRight, User, CreditCard } from 'lucide-react';
 import { useUser } from './UserContext';
-import { getReservationsByDateFloor, createReservation, updateReservation, deleteReservation, getAvailableTables } from './api';
+import { getReservationsByDateFloor, createReservation, updateReservation, deleteReservation, getAvailableTables } from '../utils/api';
 import Sidebar from './Sidebar.jsx'
 import HeaderBar from './HeaderBar.jsx'
 

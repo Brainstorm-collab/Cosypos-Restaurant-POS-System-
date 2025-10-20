@@ -51,40 +51,28 @@ async function main() {
   console.log('Users created:', { admin: admin.email, staff: staff.email, customer: customer.email });
 
   // Create menu categories
-  const pizzaCategory = await prisma.menuCategory.upsert({
-    where: { name: 'Pizza' },
-    update: {},
-    create: { name: 'Pizza' }
+  const pizzaCategory = await prisma.menuCategory.create({
+    data: { name: 'Pizza' }
   });
 
-  const burgerCategory = await prisma.menuCategory.upsert({
-    where: { name: 'Burger' },
-    update: {},
-    create: { name: 'Burger' }
+  const burgerCategory = await prisma.menuCategory.create({
+    data: { name: 'Burger' }
   });
 
-  const chickenCategory = await prisma.menuCategory.upsert({
-    where: { name: 'Chicken' },
-    update: {},
-    create: { name: 'Chicken' }
+  const chickenCategory = await prisma.menuCategory.create({
+    data: { name: 'Chicken' }
   });
 
-  const bakeryCategory = await prisma.menuCategory.upsert({
-    where: { name: 'Bakery' },
-    update: {},
-    create: { name: 'Bakery' }
+  const bakeryCategory = await prisma.menuCategory.create({
+    data: { name: 'Bakery' }
   });
 
-  const beverageCategory = await prisma.menuCategory.upsert({
-    where: { name: 'Beverage' },
-    update: {},
-    create: { name: 'Beverage' }
+  const beverageCategory = await prisma.menuCategory.create({
+    data: { name: 'Beverage' }
   });
 
-  const seafoodCategory = await prisma.menuCategory.upsert({
-    where: { name: 'Seafood' },
-    update: {},
-    create: { name: 'Seafood' }
+  const seafoodCategory = await prisma.menuCategory.create({
+    data: { name: 'Seafood' }
   });
 
   // Create menu items

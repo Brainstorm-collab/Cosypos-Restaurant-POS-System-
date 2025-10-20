@@ -6,9 +6,9 @@ import { useUser } from './UserContext';
 import Sidebar from './Sidebar.jsx';
 import HeaderBar from './HeaderBar.jsx';
 import InventoryQuickEdit from './InventoryQuickEdit.jsx';
-import { useInventoryQuickEdit } from './useInventoryQuickEdit.js';
-import { getMenuItems } from './api';
-import { useMenuItems, useDataSync } from './useDataSync';
+import { useInventoryQuickEdit } from '../hooks/useInventoryQuickEdit.js';
+import { getMenuItems } from '../utils/api';
+import { useMenuItems, useDataSync } from '../hooks/useDataSync';
 
 const colors = { 
   bg: '#111315', 

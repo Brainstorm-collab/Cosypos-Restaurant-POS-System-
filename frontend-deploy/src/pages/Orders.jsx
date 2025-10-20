@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Bell } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from './UserContext';
-import { getOrders, createOrder, updateOrder, getMenuItems } from './api';
-import { useMenuItems, useDataSync } from './useDataSync';
+import { getOrders, createOrder, updateOrder, getMenuItems } from '../utils/api';
+import { useMenuItems, useDataSync } from '../hooks/useDataSync';
 import Sidebar from './Sidebar.jsx'
 import HeaderBar from './HeaderBar.jsx'
 import Payment from './Payment.jsx'

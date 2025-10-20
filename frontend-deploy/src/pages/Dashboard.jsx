@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Bell } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from './UserContext';
-import { getMenuItems } from './api';
+import { getMenuItems } from '../utils/api';
 import Layout from './Layout.jsx';
-import { onInventoryUpdate } from './inventorySync';
+import { onInventoryUpdate } from '../utils/inventorySync';
 
 const colors = {
   bg: '#111315',

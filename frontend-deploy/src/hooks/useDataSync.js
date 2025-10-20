@@ -1,7 +1,7 @@
 // Custom hook for using centralized data synchronization
 
 import { useState, useEffect } from 'react';
-import dataSync from './dataSync';
+import dataSync from '../utils/dataSync';
 
 export const useMenuItems = () => {
   const [menuItems, setMenuItems] = useState([]);
