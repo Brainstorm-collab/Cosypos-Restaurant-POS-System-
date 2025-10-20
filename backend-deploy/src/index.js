@@ -107,5 +107,20 @@ app.get('/api/cors-test', (_req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.json({ cors: 'working', timestamp: new Date().toISOString() });
 });
+
+// Test deployment endpoint - LOCALHOST TO PRODUCTION TEST
+app.get('/api/deployment-test', (_req, res) => {
+  console.log('🚀 Deployment test endpoint called - LOCALHOST TO PRODUCTION WORKFLOW TEST');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.json({ 
+    message: '🎉 LOCALHOST TO PRODUCTION DEPLOYMENT TEST SUCCESSFUL!',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    database: 'PostgreSQL (Render.com)',
+    status: 'working'
+  });
+});
 const port = Number(process.env.PORT||4000);
 app.listen(port, () => console.log('API listening on http://localhost:'+port));
