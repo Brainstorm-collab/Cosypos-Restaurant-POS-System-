@@ -4,6 +4,7 @@ import { Bell, Calendar, User, DollarSign, TrendingUp, Users, Clock } from 'luci
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, AreaChart, Area } from 'recharts';
 import Sidebar from './Sidebar.jsx'
 import HeaderBar from './HeaderBar.jsx'
+import { useUser } from './UserContext.jsx'
 
 const colors = { 
   bg: '#111315', 
@@ -138,6 +139,7 @@ const reservationDetails = [
 
 export default function Reports() {
   const navigate = useNavigate();
+  const { user } = useUser();
   const [activeTab, setActiveTab] = useState('reservation');
   const [activeFilter, setActiveFilter] = useState('Confirmed');
   const [dateRange, setDateRange] = useState('01/04/2024 — 08/04/2024');
@@ -249,6 +251,7 @@ export default function Reports() {
 
             {/* User Profile */}
             <div 
+              onClick={() => navigate('/profile')}
               style={{ 
                 width: 37.15,
                 height: 37.15,
@@ -273,13 +276,17 @@ export default function Reports() {
               }}
             >
               <img 
-                src="/profile img icon.jpg" 
+                src={user?.profileImage ? user.profileImage : "/profile img icon.jpg"} 
                 alt="Profile" 
                 style={{ 
                   width: '100%',
                   height: '100%',
                   objectFit: 'cover',
                   borderRadius: '50%'
+                }}
+                onError={(e) => {
+                  // Fallback to default image if uploaded image fails to load
+                  e.target.src = "/profile img icon.jpg";
                 }}
               />
             </div>

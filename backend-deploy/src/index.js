@@ -10,10 +10,9 @@ const app = express();
 
 // Performance middleware
 app.use(compression()); // Enable gzip compression
-app.use(helmet({
-  contentSecurityPolicy: process.env.NODE_ENV === 'development' ? false : undefined,
-  crossOriginEmbedderPolicy: process.env.NODE_ENV === 'development' ? false : undefined
-}));
+
+// Completely disable helmet for development
+// app.use(helmet());
 // ULTIMATE CORS FIX - Set headers on EVERY request
 app.use((req, res, next) => {
   console.log('Setting CORS headers for:', req.method, req.url);
@@ -22,6 +21,11 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
   res.setHeader('Access-Control-Allow-Credentials', 'false');
   res.setHeader('Access-Control-Max-Age', '86400');
+  
+  // Override any restrictive CORS policies
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
   
   if (req.method === 'OPTIONS') {
     console.log('Handling OPTIONS request');
@@ -35,12 +39,103 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static files from uploads directory with caching
-app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
-  maxAge: '1d', // Cache images for 1 day
-  etag: true,
-  lastModified: true
-}));
+// Serve static files from uploads directory with cross-origin support
+app.use('/uploads', (req, res, next) => {
+  console.log('Setting upload headers for:', req.url);
+  
+  // Set permissive CORS headers for all upload requests
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
+  res.setHeader('Access-Control-Allow-Credentials', 'false');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+  
+  // Remove any restrictive headers that might be set elsewhere
+  res.removeHeader('Cross-Origin-Resource-Policy');
+  res.removeHeader('Cross-Origin-Embedder-Policy');
+  res.removeHeader('Cross-Origin-Opener-Policy');
+  
+  // Set the correct headers
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  next();
+});
+
+// Custom route for serving images with proper CORS headers
+app.get('/uploads/*', (req, res) => {
+  console.log('🖼️ Serving image:', req.url);
+  const filePath = path.join(__dirname, '../uploads', req.params[0]);
+  
+  // Set permissive CORS headers BEFORE any other processing
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
+  res.setHeader('Access-Control-Allow-Credentials', 'false');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+  
+  // Force remove any restrictive headers that might be set by Express
+  res.removeHeader('Cross-Origin-Resource-Policy');
+  res.removeHeader('Cross-Origin-Embedder-Policy');
+  res.removeHeader('Cross-Origin-Opener-Policy');
+  
+  // Set the correct headers again
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+  
+  // Log headers being set
+  console.log('📋 Headers being set:', {
+    'Cross-Origin-Resource-Policy': res.getHeader('Cross-Origin-Resource-Policy'),
+    'Cross-Origin-Embedder-Policy': res.getHeader('Cross-Origin-Embedder-Policy'),
+    'Cross-Origin-Opener-Policy': res.getHeader('Cross-Origin-Opener-Policy'),
+    'Access-Control-Allow-Origin': res.getHeader('Access-Control-Allow-Origin')
+  });
+  
+  // Serve the file
+  res.sendFile(filePath, (err) => {
+    if (err) {
+      console.error('Error serving file:', err);
+      res.status(404).send('File not found');
+    } else {
+      console.log('✅ File served successfully:', filePath);
+    }
+  });
+});
+
+// Alternative image serving endpoint
+app.get('/api/image/*', (req, res) => {
+  console.log('🖼️ Alternative image endpoint:', req.url);
+  const filePath = path.join(__dirname, '../uploads', req.params[0]);
+  
+  // Set permissive CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
+  res.setHeader('Access-Control-Allow-Credentials', 'false');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+  
+  // Serve the file
+  res.sendFile(filePath, (err) => {
+    if (err) {
+      console.error('Error serving file:', err);
+      res.status(404).send('File not found');
+    } else {
+      console.log('✅ File served successfully via alternative endpoint:', filePath);
+    }
+  });
+});
 
 
 // Handle OPTIONS requests for auth routes specifically
@@ -122,5 +217,40 @@ app.get('/api/deployment-test', (_req, res) => {
     status: 'working'
   });
 });
+
+// Test image endpoint with explicit CORS headers
+app.get('/api/test-image', (_req, res) => {
+  console.log('🧪 Test image endpoint called');
+  
+  // Explicitly set all CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
+  res.setHeader('Access-Control-Allow-Credentials', 'false');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+  
+  // Return a simple test response
+  res.json({ 
+    message: 'Test image endpoint with CORS headers',
+    timestamp: new Date().toISOString(),
+    headers: {
+      'Cross-Origin-Resource-Policy': 'cross-origin',
+      'Cross-Origin-Embedder-Policy': 'unsafe-none',
+      'Cross-Origin-Opener-Policy': 'unsafe-none'
+    }
+  });
+});
+// Final middleware to override any restrictive headers
+app.use((req, res, next) => {
+  // Override any restrictive CORS headers that might have been set
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+});
+
 const port = Number(process.env.PORT||4000);
 app.listen(port, () => console.log('API listening on http://localhost:'+port));

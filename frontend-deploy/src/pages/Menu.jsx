@@ -1247,7 +1247,7 @@ export default function Menu() {
                 }}
               >
                 <img 
-                  src={user?.profileImage ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${user.profileImage}` : "/profile img icon.jpg"} 
+                  src={user?.profileImage ? user.profileImage : "/profile img icon.jpg"} 
                   alt="Profile" 
                   loading="lazy"
                   style={{ 
