@@ -39,36 +39,6 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static files from uploads directory with cross-origin support
-app.use('/uploads', (req, res, next) => {
-  console.log('Setting upload headers for:', req.url);
-  
-  // Set permissive CORS headers for all upload requests
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
-  res.setHeader('Access-Control-Allow-Credentials', 'false');
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
-  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-  
-  // Remove any restrictive headers that might be set elsewhere
-  res.removeHeader('Cross-Origin-Resource-Policy');
-  res.removeHeader('Cross-Origin-Embedder-Policy');
-  res.removeHeader('Cross-Origin-Opener-Policy');
-  
-  // Set the correct headers
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
-  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-  
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-  next();
-});
-
 // Static file serving for uploads with proper CORS headers
 app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
   maxAge: '1d', // Cache images for 1 day

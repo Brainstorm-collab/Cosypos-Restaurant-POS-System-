@@ -259,7 +259,7 @@ export default function MyProfile() {
             overflow: 'hidden'
           }}>
             <img 
-              src={user?.profileImage ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${user.profileImage}` : "/profile img icon.jpg"} 
+              src={user?.profileImage ? (import.meta.env.DEV ? user.profileImage : `${import.meta.env.VITE_API_URL}${user.profileImage}`) : "/profile img icon.jpg"} 
               alt="Profile" 
               style={{ 
                 width: '100%',
