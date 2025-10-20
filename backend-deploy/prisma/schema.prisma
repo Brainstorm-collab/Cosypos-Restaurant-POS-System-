@@ -4,44 +4,37 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  role         Role
-  name         String
-  phone        String?
-  profileImage String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  orders        Order[]
-  reservations  Reservation[]
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  role          Role
+  name          String
+  phone         String?
+  profileImage  String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   attendance    Attendance[]
   notifications Notification[]
+  orders        Order[]
+  reservations  Reservation[]
 
   @@index([role])
   @@index([email])
   @@index([createdAt])
 }
 
-enum Role {
-  ADMIN
-  STAFF
-  USER
-}
-
 model MenuCategory {
   id        String     @id @default(cuid())
-  name      String
+  name      String     @unique
   image     String?
-  items     MenuItem[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+  items     MenuItem[]
 }
 
 model MenuItem {
@@ -49,15 +42,14 @@ model MenuItem {
   name        String
   description String?
   priceCents  Int
-  available   Boolean       @default(true)
-  stock       Int           @default(0)
+  available   Boolean      @default(true)
+  stock       Int          @default(0)
   image       String?
-  category    MenuCategory @relation(fields: [categoryId], references: [id])
   categoryId  String
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  orderItems OrderItem[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  category    MenuCategory @relation(fields: [categoryId], references: [id])
+  orderItems  OrderItem[]
 
   @@index([categoryId])
   @@index([available])
@@ -78,33 +70,26 @@ model InventoryItem {
 }
 
 model Table {
-  id        String      @id @default(cuid())
-  label     String      @unique
-  capacity  Int
-  status    TableStatus @default(AVAILABLE)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-
+  id           String        @id @default(cuid())
+  label        String        @unique
+  capacity     Int
+  status       TableStatus   @default(AVAILABLE)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   orders       Order[]
   reservations Reservation[]
-}
-
-enum TableStatus {
-  AVAILABLE
-  OCCUPIED
-  RESERVED
 }
 
 model Order {
   id         String      @id @default(cuid())
   status     OrderStatus @default(PENDING)
-  user       User?       @relation(fields: [userId], references: [id])
   userId     String?
-  table      Table?      @relation(fields: [tableId], references: [id])
   tableId    String?
   totalCents Int         @default(0)
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
+  table      Table?      @relation(fields: [tableId], references: [id])
+  user       User?       @relation(fields: [userId], references: [id])
   items      OrderItem[]
   payments   Payment[]
 
@@ -112,6 +97,85 @@ model Order {
   @@index([userId])
   @@index([tableId])
   @@index([createdAt])
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  menuItemId String
+  qty        Int
+  priceCents Int
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  order      Order    @relation(fields: [orderId], references: [id])
+}
+
+model Reservation {
+  id              String            @id @default(cuid())
+  customerId      String
+  tableId         String?
+  tableNumber     String
+  floor           Int
+  paxNumber       Int
+  reservationDate DateTime
+  startTime       String
+  endTime         String
+  depositFee      Float             @default(0)
+  status          ReservationStatus @default(PENDING)
+  paymentMethod   String            @default("CASH")
+  specialRequests String?
+  customerTitle   String            @default("Mr")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  customer        User              @relation(fields: [customerId], references: [id])
+  table           Table?            @relation(fields: [tableId], references: [id])
+
+  @@index([customerId])
+  @@index([tableId])
+  @@index([reservationDate])
+  @@index([status])
+  @@index([floor])
+}
+
+model Attendance {
+  id        String    @id @default(cuid())
+  userId    String
+  clockIn   DateTime
+  clockOut  DateTime?
+  breaksMin Int       @default(0)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  orderId     String
+  method      String
+  amountCents Int
+  status      String
+  createdAt   DateTime @default(now())
+  order       Order    @relation(fields: [orderId], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String?
+  channel   String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  USER
+}
+
+enum TableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
 }
 
 enum OrderStatus {
@@ -122,77 +186,10 @@ enum OrderStatus {
   CANCELLED
 }
 
-model OrderItem {
-  id         String   @id @default(cuid())
-  order      Order    @relation(fields: [orderId], references: [id])
-  orderId    String
-  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
-  menuItemId String
-  qty        Int
-  priceCents Int
-}
-
-model Reservation {
-  id               String            @id @default(cuid())
-  customer         User              @relation(fields: [customerId], references: [id])
-  customerId       String
-  table            Table?            @relation(fields: [tableId], references: [id])
-  tableId          String?
-  tableNumber      String
-  floor            Int
-  paxNumber        Int
-  reservationDate  DateTime
-  startTime        String
-  endTime          String
-  depositFee       Float             @default(0)
-  status           ReservationStatus @default(PENDING)
-  paymentMethod    String            @default("CASH")
-  specialRequests  String?
-  customerTitle    String            @default("Mr")
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-
-  @@index([customerId])
-  @@index([tableId])
-  @@index([reservationDate])
-  @@index([status])
-  @@index([floor])
-}
-
 enum ReservationStatus {
   PENDING
   CONFIRMED
   CANCELLED
   NO_SHOW
   COMPLETED
-}
-
-model Attendance {
-  id        String    @id @default(cuid())
-  user      User      @relation(fields: [userId], references: [id])
-  userId    String
-  clockIn   DateTime
-  clockOut  DateTime?
-  breaksMin Int       @default(0)
-  createdAt DateTime  @default(now())
-}
-
-model Payment {
-  id          String   @id @default(cuid())
-  order       Order    @relation(fields: [orderId], references: [id])
-  orderId     String
-  method      String
-  amountCents Int
-  status      String
-  createdAt   DateTime @default(now())
-}
-
-model Notification {
-  id        String   @id @default(cuid())
-  user      User?    @relation(fields: [userId], references: [id])
-  userId    String?
-  channel   String
-  message   String
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
 }
