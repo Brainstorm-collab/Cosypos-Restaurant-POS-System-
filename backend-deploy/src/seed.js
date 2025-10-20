@@ -104,11 +104,16 @@ async function main() {
   ];
 
   for (const item of menuItems) {
-    await prisma.menuItem.upsert({
-      where: { name: item.name },
-      update: {},
-      create: item
+    // Check if menu item already exists
+    const existingItem = await prisma.menuItem.findFirst({
+      where: { name: item.name }
     });
+    
+    if (!existingItem) {
+      await prisma.menuItem.create({
+        data: item
+      });
+    }
   }
 
   console.log('Menu categories and items created');
