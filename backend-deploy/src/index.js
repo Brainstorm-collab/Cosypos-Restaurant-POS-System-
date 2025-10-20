@@ -70,9 +70,9 @@ app.use('/uploads', (req, res, next) => {
 });
 
 // Custom route for serving images with proper CORS headers
-app.get('/uploads/*', (req, res) => {
+app.get('/uploads/:path*', (req, res) => {
   console.log('🖼️ Serving image:', req.url);
-  const filePath = path.join(__dirname, '../uploads', req.params[0]);
+  const filePath = path.join(__dirname, '../uploads', req.params.path);
   
   // Set permissive CORS headers BEFORE any other processing
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -113,9 +113,9 @@ app.get('/uploads/*', (req, res) => {
 });
 
 // Alternative image serving endpoint
-app.get('/api/image/*', (req, res) => {
+app.get('/api/image/:path*', (req, res) => {
   console.log('🖼️ Alternative image endpoint:', req.url);
-  const filePath = path.join(__dirname, '../uploads', req.params[0]);
+  const filePath = path.join(__dirname, '../uploads', req.params.path);
   
   // Set permissive CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
