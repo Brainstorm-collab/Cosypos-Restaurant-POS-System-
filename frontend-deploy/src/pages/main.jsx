@@ -1,10 +1,10 @@
 import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import './index.css'
+import '../styles/index.css'
 import { UserProvider } from './UserContext.jsx'
-import { PerformanceDashboard } from './PerformanceMonitor.jsx'
-import { LoadingSpinner } from './LazyComponents.jsx'
+import { PerformanceDashboard } from '../utils/PerformanceMonitor.jsx'
+import { LoadingSpinner } from '../components/LazyComponents.jsx'
 import Login from './Login.jsx'
 import Dashboard from './Dashboard.jsx'
 import Forgot from './Forgot.jsx'
@@ -25,7 +25,7 @@ import {
   LazyReservationDetails, 
   LazyProfile, 
   LazyNotifications 
-} from './LazyComponents.jsx'
+} from '../components/LazyComponents.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
