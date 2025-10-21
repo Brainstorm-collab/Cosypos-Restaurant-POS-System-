@@ -298,9 +298,19 @@ function AttendanceTableHeader() {
   );
 }
 
-function StaffRow({ staff, onEdit, onDelete, zebra, user }) {
+function StaffRow({ staff, onEdit, onDelete, zebra, user, attendanceStatus, onStatusChange }) {
   const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
+  const [showStatusMenu, setShowStatusMenu] = useState(false);
+  
+  const statusOptions = [
+    { key: 'present', label: 'Present', color: '#4CAF50', bgColor: '#E8F5E9' },
+    { key: 'absent', label: 'Absent', color: '#F44336', bgColor: '#FFEBEE' },
+    { key: 'half', label: 'Half Shift', color: '#FF9800', bgColor: '#FFF3E0' },
+    { key: 'leave', label: 'Leave', color: '#2196F3', bgColor: '#E3F2FD' }
+  ];
+
+  const currentStatus = statusOptions.find(s => s.key === attendanceStatus);
   
   return (
     <div 
@@ -315,7 +325,8 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user }) {
         padding: '12px 20px',
         marginBottom: 0,
         cursor: 'pointer',
-        transition: 'background 0.2s ease'
+        transition: 'background 0.2s ease',
+        boxSizing: 'border-box'
       }}>
       {/* Checkbox */}
       <div style={{ 
@@ -488,6 +499,144 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user }) {
         {staff.timings || '-'}
       </div>
       
+      {/* Attendance Status */}
+      <div onClick={(e) => e.stopPropagation()} style={{ 
+        position: 'relative',
+        marginRight: 20,
+        flexShrink: 0,
+        minWidth: 120
+      }}>
+        {currentStatus ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => setShowStatusMenu(!showStatusMenu)}
+              style={{
+                padding: '8px 14px',
+                background: currentStatus.bgColor,
+                color: currentStatus.color,
+                border: `1px solid ${currentStatus.color}`,
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'scale(1.05)';
+                e.target.style.boxShadow = `0 2px 8px ${currentStatus.color}40`;
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'scale(1)';
+                e.target.style.boxShadow = 'none';
+              }}
+            >
+              {currentStatus.label}
+            </button>
+            <button
+              onClick={() => setShowStatusMenu(!showStatusMenu)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: colors.muted,
+                cursor: 'pointer',
+                padding: 4,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'color 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.target.style.color = colors.text}
+              onMouseLeave={(e) => e.target.style.color = colors.muted}
+            >
+              <FiEdit3 size={14} />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowStatusMenu(!showStatusMenu)}
+            style={{
+              padding: '8px 14px',
+              background: colors.inputBg,
+              color: colors.muted,
+              border: `1px solid ${colors.line}`,
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              whiteSpace: 'nowrap'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = '#4A4F50';
+              e.target.style.color = colors.text;
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = colors.inputBg;
+              e.target.style.color = colors.muted;
+            }}
+          >
+            Mark Status
+          </button>
+        )}
+
+        {/* Status Dropdown Menu */}
+        {showStatusMenu && (
+          <div style={{
+            position: 'absolute',
+            top: '100%',
+            right: 0,
+            marginTop: 8,
+            background: colors.panel,
+            borderRadius: 8,
+            border: `1px solid ${colors.accent}`,
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+            zIndex: 1000,
+            minWidth: 140,
+            overflow: 'hidden'
+          }}>
+            {statusOptions.map((option) => (
+              <button
+                key={option.key}
+                onClick={() => {
+                  onStatusChange(staff.dbId || staff.id, option.key);
+                  setShowStatusMenu(false);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  background: 'transparent',
+                  color: option.color,
+                  border: 'none',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = option.bgColor;
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = 'transparent';
+                }}
+              >
+                <div style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: option.color
+                }} />
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      
       {/* Action Buttons */}
       <div onClick={(e) => e.stopPropagation()} style={{ 
         display: 'flex',
@@ -585,7 +734,8 @@ function AttendanceRow({ staff, attendanceStatus, onStatusChange, user }) {
         padding: '12px 20px',
         marginBottom: 0,
         cursor: 'pointer',
-        transition: 'background 0.2s ease'
+        transition: 'background 0.2s ease',
+        boxSizing: 'border-box'
       }}>
       {/* Checkbox */}
       <div style={{ 
@@ -959,6 +1109,7 @@ export default function Staff() {
   const [editInitial, setEditInitial] = useState(null);
   const [activeTab, setActiveTab] = useState('management'); // 'management' or 'attendance'
   const [attendanceRecords, setAttendanceRecords] = useState([]); // Track attendance records from database
+  const [staffStatusMap, setStaffStatusMap] = useState({}); // Local state for staff management status (dummy)
   const [sortBy, setSortBy] = useState('name'); // Default sort by name
   const [sortOrder, setSortOrder] = useState('asc'); // 'asc' or 'desc'
   const [list, setList] = useState(DUMMY_STAFF); // Initialize with dummy data
@@ -991,7 +1142,7 @@ export default function Staff() {
       
       // Format the data for display with sequential IDs
       const formattedStaff = response.map((staff, index) => ({
-        id: `#${String(index + 113).padStart(3, '0')}`, // Start after dummy data
+        id: `#${String(DUMMY_STAFF.length + index + 101).padStart(3, '0')}`, // Start after dummy data
         dbId: staff.id, // Keep original database ID for operations
         name: staff.name || 'Unknown',
         role: staff.role || 'STAFF',
@@ -1010,7 +1161,8 @@ export default function Staff() {
       console.error('Error fetching staff:', error);
       // Keep dummy data visible even if API fails
       setList(DUMMY_STAFF);
-      setError(null); // Don't show error, just use dummy data
+      // Preserve error state so UI can show error banner while displaying dummy data
+      setError(error.message || 'Failed to fetch staff from server');
     } finally {
       setLoading(false);
     }
@@ -1018,7 +1170,7 @@ export default function Staff() {
 
   const fetchAttendanceData = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toLocaleDateString('en-CA'); // en-CA gives YYYY-MM-DD format in local timezone
       const response = await api.get(`/api/attendance?date=${today}`);
       setAttendanceRecords(response);
     } catch (error) {
@@ -1076,6 +1228,23 @@ export default function Staff() {
     setDeleteConfirm({ show: false, staffId: null, staffName: '' });
   };
   
+  const handleStaffStatusChange = (staffId, status) => {
+    // Update local state (dummy - no backend)
+    setStaffStatusMap(prev => ({
+      ...prev,
+      [staffId]: status
+    }));
+    
+    const statusLabels = {
+      'present': 'Present',
+      'absent': 'Absent',
+      'half': 'Half Shift',
+      'leave': 'Leave'
+    };
+    
+    showToast(`Status marked as ${statusLabels[status]}`, 'success');
+  };
+
   const handleAttendanceStatusChange = async (staffDbId, status) => {
     try {
       // Map status to backend enum values
@@ -1156,8 +1325,17 @@ export default function Staff() {
   const sortedList = useMemo(() => sortStaff(list), [list, sortBy, sortOrder]);
   
   const rows = useMemo(() => sortedList.map((s, i) => (
-    <StaffRow key={s.id} staff={s} onEdit={openEdit} onDelete={onDelete} zebra={i % 2 === 1} user={user} />
-  )), [sortedList, user]);
+    <StaffRow 
+      key={s.id} 
+      staff={s} 
+      onEdit={openEdit} 
+      onDelete={onDelete} 
+      zebra={i % 2 === 1} 
+      user={user} 
+      attendanceStatus={staffStatusMap[s.dbId || s.id]}
+      onStatusChange={handleStaffStatusChange}
+    />
+  )), [sortedList, user, staffStatusMap]);
 
   // Helper to get attendance status for a staff member
   const getAttendanceStatus = (staffDbId) => {
@@ -1176,11 +1354,19 @@ export default function Staff() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text, overflowX: 'hidden' }}>
-      <div style={{ width: '100%', maxWidth: '100vw', margin: '0 auto', position: 'relative' }}>
+    <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text, overflowX: 'hidden', width: '100%', maxWidth: '100vw' }}>
+      <div style={{ width: '100%', maxWidth: '100vw', margin: '0 auto', position: 'relative', overflowX: 'hidden' }}>
         <Sidebar />
         <Header onAdd={openAdd} count={list.length} activeTab={activeTab} setActiveTab={setActiveTab} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} user={user} />
-        <main className="page-main-content" style={{ paddingTop: 20, paddingBottom: 40 }}>
+        <main className="page-main-content" style={{ 
+          paddingTop: 20, 
+          paddingBottom: 40, 
+          paddingLeft: 192, 
+          paddingRight: 16, 
+          maxWidth: '100%', 
+          boxSizing: 'border-box',
+          marginLeft: 0
+        }}>
           {loading ? (
             <div style={{ 
               display: 'flex', 
@@ -1204,182 +1390,216 @@ export default function Staff() {
               {error}
             </div>
           ) : activeTab === 'management' ? (
-            <>
-              {/* Column Headers */}
-              <div style={{ 
-                width: '100%',
-                height: 50,
-                background: colors.panel,
-                display: 'flex',
-                alignItems: 'center',
-                padding: '0 20px',
-                marginBottom: 1,
-                borderBottom: '1px solid #3D4142'
-              }}>
-                {/* Checkbox column */}
-                <div style={{ width: 20, marginRight: 20 }}></div>
-                
-                {/* ID */}
+            <div style={{ 
+              width: '100%', 
+              maxWidth: '1400px',
+              margin: '0 auto',
+              overflowX: 'auto',
+              overflowY: 'visible',
+              WebkitOverflowScrolling: 'touch',
+              borderRadius: 10,
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+            }}>
+              <div style={{ minWidth: 1100, width: '100%' }}>
+                {/* Column Headers */}
                 <div style={{ 
-                  width: 60,
-                  fontFamily: 'Poppins',
-                  fontWeight: 500,
-                  fontSize: 14,
-                  color: '#FFFFFF',
-                  marginRight: 30
-                }}>ID</div>
+                  width: '100%',
+                  height: 50,
+                  background: colors.panel,
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0 20px',
+                  marginBottom: 1,
+                  borderBottom: '1px solid #3D4142',
+                  boxSizing: 'border-box'
+                }}>
+                  {/* Checkbox column */}
+                  <div style={{ width: 20, marginRight: 20 }}></div>
+                  
+                  {/* ID */}
+                  <div style={{ 
+                    width: 60,
+                    fontFamily: 'Poppins',
+                    fontWeight: 500,
+                    fontSize: 14,
+                    color: '#FFFFFF',
+                    marginRight: 30
+                  }}>ID</div>
+                  
+                  {/* Name */}
+                  <div style={{ 
+                    width: 200,
+                    fontFamily: 'Poppins',
+                    fontWeight: 500,
+                    fontSize: 14,
+                    color: '#FFFFFF',
+                    marginRight: 30
+                  }}>Name</div>
+                  
+                  {/* Email */}
+                  <div style={{ 
+                    width: 200,
+                    fontFamily: 'Poppins',
+                    fontWeight: 500,
+                    fontSize: 14,
+                    color: '#FFFFFF',
+                    marginRight: 30
+                  }}>Email</div>
+                  
+                  {/* Phone */}
+                  <div style={{ 
+                    width: 150,
+                    fontFamily: 'Poppins',
+                    fontWeight: 500,
+                    fontSize: 14,
+                    color: '#FFFFFF',
+                    marginRight: 30
+                  }}>Phone</div>
+                  
+                   {/* Age */}
+                   <div style={{ 
+                     width: 80,
+                     fontFamily: 'Poppins',
+                     fontWeight: 500,
+                     fontSize: 14,
+                     color: '#FFFFFF',
+                     textAlign: 'left',
+                     marginRight: 30,
+                     paddingLeft: 5
+                   }}>Age</div>
+                   
+                   {/* Salary */}
+                   <div style={{ 
+                     width: 100,
+                     fontFamily: 'Poppins',
+                     fontWeight: 500,
+                     fontSize: 14,
+                     color: '#FFFFFF',
+                     textAlign: 'left',
+                     marginRight: 30,
+                     paddingLeft: 5
+                   }}>Salary</div>
+                   
+                   {/* Timings */}
+                   <div style={{ 
+                     width: 120,
+                     fontFamily: 'Poppins',
+                     fontWeight: 500,
+                     fontSize: 14,
+                     color: '#FFFFFF',
+                     textAlign: 'left',
+                     marginRight: 30,
+                     paddingLeft: 5
+                   }}>Timings</div>
+                   
+                   {/* Status */}
+                   <div style={{ 
+                     fontFamily: 'Poppins',
+                     fontWeight: 500,
+                     fontSize: 14,
+                     color: '#FFFFFF',
+                     marginRight: 20,
+                     minWidth: 120
+                   }}>Status</div>
+                   
+                   {/* Actions */}
+                   <div style={{ 
+                     fontFamily: 'Poppins',
+                     fontWeight: 500,
+                     fontSize: 14,
+                     color: '#FFFFFF',
+                     marginLeft: 'auto',
+                    minWidth: 140,
+                    textAlign: 'right',
+                    paddingRight: 20
+                   }}>Actions</div>
+                </div>
                 
-                {/* Name */}
-                <div style={{ 
-                  width: 200,
-                  fontFamily: 'Poppins',
-                  fontWeight: 500,
-                  fontSize: 14,
-                  color: '#FFFFFF',
-                  marginRight: 30
-                }}>Name</div>
-                
-                {/* Email */}
-                <div style={{ 
-                  width: 200,
-                  fontFamily: 'Poppins',
-                  fontWeight: 500,
-                  fontSize: 14,
-                  color: '#FFFFFF',
-                  marginRight: 30
-                }}>Email</div>
-                
-                {/* Phone */}
-                <div style={{ 
-                  width: 150,
-                  fontFamily: 'Poppins',
-                  fontWeight: 500,
-                  fontSize: 14,
-                  color: '#FFFFFF',
-                  marginRight: 30
-                }}>Phone</div>
-                
-                 {/* Age */}
-                 <div style={{ 
-                   width: 80,
-                   fontFamily: 'Poppins',
-                   fontWeight: 500,
-                   fontSize: 14,
-                   color: '#FFFFFF',
-                   textAlign: 'left',
-                   marginRight: 30,
-                   paddingLeft: 5
-                 }}>Age</div>
-                 
-                 {/* Salary */}
-                 <div style={{ 
-                   width: 100,
-                   fontFamily: 'Poppins',
-                   fontWeight: 500,
-                   fontSize: 14,
-                   color: '#FFFFFF',
-                   textAlign: 'left',
-                   marginRight: 30,
-                   paddingLeft: 5
-                 }}>Salary</div>
-                 
-                 {/* Timings */}
-                 <div style={{ 
-                   width: 120,
-                   fontFamily: 'Poppins',
-                   fontWeight: 500,
-                   fontSize: 14,
-                   color: '#FFFFFF',
-                   textAlign: 'left',
-                   marginRight: 30,
-                   paddingLeft: 5
-                 }}>Timings</div>
-                 
-                 {/* Actions */}
-                 <div style={{ 
-                   fontFamily: 'Poppins',
-                   fontWeight: 500,
-                   fontSize: 14,
-                   color: '#FFFFFF',
-                   marginLeft: 'auto',
-                  minWidth: 140,
-                  textAlign: 'right',
-                  paddingRight: 20
-                 }}>Actions</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {rows}
+                </div>
               </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {rows}
-              </div>
-            </>
+            </div>
           ) : (
-            <>
-              {/* Attendance Column Headers */}
-              <div style={{ 
-                width: '100%',
-                height: 50,
-                background: colors.panel,
-                display: 'flex',
-                alignItems: 'center',
-                padding: '0 20px',
-                marginBottom: 1,
-                borderBottom: '1px solid #3D4142'
-              }}>
-                <div style={{ width: 20, marginRight: 20 }}></div>
+            <div style={{ 
+              width: '100%', 
+              maxWidth: '1200px',
+              margin: '0 auto',
+              overflowX: 'auto',
+              overflowY: 'visible',
+              WebkitOverflowScrolling: 'touch',
+              borderRadius: 10,
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+            }}>
+              <div style={{ minWidth: 900, width: '100%' }}>
+                {/* Attendance Column Headers */}
                 <div style={{ 
-                  width: 60,
-                  fontFamily: 'Poppins',
-                  fontWeight: 500,
-                  fontSize: 14,
-                  color: '#FFFFFF',
-                  marginRight: 30
-                }}>ID</div>
-                <div style={{ 
-                  width: 200,
-                  fontFamily: 'Poppins',
-                  fontWeight: 500,
-                  fontSize: 14,
-                  color: '#FFFFFF',
-                  marginRight: 30
-                }}>Name</div>
-                <div style={{ 
-                  width: 120,
-                  fontFamily: 'Poppins',
-                  fontWeight: 500,
-                  fontSize: 14,
-                  color: '#FFFFFF',
-                  marginRight: 30
-                }}>Date</div>
-                <div style={{ 
-                  width: 140,
-                  fontFamily: 'Poppins',
-                  fontWeight: 500,
-                  fontSize: 14,
-                  color: '#FFFFFF',
-                  marginRight: 30
-                }}>Timings</div>
-                <div style={{ 
-                  fontFamily: 'Poppins',
-                  fontWeight: 500,
-                  fontSize: 14,
-                  color: '#FFFFFF',
-                  marginLeft: 'auto'
-                }}>Status</div>
+                  width: '100%',
+                  height: 50,
+                  background: colors.panel,
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0 20px',
+                  marginBottom: 1,
+                  borderBottom: '1px solid #3D4142',
+                  boxSizing: 'border-box'
+                }}>
+                  <div style={{ width: 20, marginRight: 20 }}></div>
+                  <div style={{ 
+                    width: 60,
+                    fontFamily: 'Poppins',
+                    fontWeight: 500,
+                    fontSize: 14,
+                    color: '#FFFFFF',
+                    marginRight: 30
+                  }}>ID</div>
+                  <div style={{ 
+                    width: 200,
+                    fontFamily: 'Poppins',
+                    fontWeight: 500,
+                    fontSize: 14,
+                    color: '#FFFFFF',
+                    marginRight: 30
+                  }}>Name</div>
+                  <div style={{ 
+                    width: 120,
+                    fontFamily: 'Poppins',
+                    fontWeight: 500,
+                    fontSize: 14,
+                    color: '#FFFFFF',
+                    marginRight: 30
+                  }}>Date</div>
+                  <div style={{ 
+                    width: 140,
+                    fontFamily: 'Poppins',
+                    fontWeight: 500,
+                    fontSize: 14,
+                    color: '#FFFFFF',
+                    marginRight: 30
+                  }}>Timings</div>
+                  <div style={{ 
+                    fontFamily: 'Poppins',
+                    fontWeight: 500,
+                    fontSize: 14,
+                    color: '#FFFFFF',
+                    marginLeft: 'auto'
+                  }}>Status</div>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {list.map((staff, i) => (
+                    <AttendanceRow 
+                      key={staff.dbId || staff.id} 
+                      staff={staff} 
+                      attendanceStatus={getAttendanceStatus(staff.dbId || staff.id)}
+                      onStatusChange={handleAttendanceStatusChange}
+                      zebra={i % 2 === 1}
+                      user={user}
+                    />
+                  ))}
+                </div>
               </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {list.map((staff, i) => (
-                  <AttendanceRow 
-                    key={staff.dbId || staff.id} 
-                    staff={staff} 
-                    attendanceStatus={getAttendanceStatus(staff.dbId || staff.id)}
-                    onStatusChange={handleAttendanceStatusChange}
-                    zebra={i % 2 === 1}
-                    user={user}
-                  />
-                ))}
-              </div>
-            </>
+            </div>
           )}
         </main>
       </div>

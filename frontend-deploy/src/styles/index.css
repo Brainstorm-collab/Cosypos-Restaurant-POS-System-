@@ -67,6 +67,53 @@ img {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Custom scrollbar styling for better visibility */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #FAC1D9;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #E8A8C8;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #FAC1D9 #1a1a1a;
+}
+
+/* Ensure page content doesn't overflow horizontally */
+.page-main-content {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Responsive layout for sidebar offset */
+@media (max-width: 1023px) {
+  .page-main-content {
+    padding-left: 16px !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page-main-content {
+    padding-left: 192px !important;
+  }
+}
+
 /* GPU acceleration for animations */
 .gpu-accelerated {
   transform: translateZ(0);

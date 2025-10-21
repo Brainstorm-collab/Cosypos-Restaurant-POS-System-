@@ -1352,8 +1352,8 @@ export default function Inventory() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text }}>
-      <div style={{ width: 1440, margin: '0 auto', position: 'relative' }}>
+    <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text, overflowX: 'hidden', width: '100%', maxWidth: '100vw' }}>
+      <div style={{ width: '100%', maxWidth: '100vw', margin: '0 auto', position: 'relative', overflowX: 'hidden' }}>
         <Sidebar />
         <HeaderBar title="Inventory" showBackButton={true} right={(
           <>
@@ -1451,25 +1451,43 @@ export default function Inventory() {
         )} />
 
         <main className="page-main-content" style={{ 
-          padding: '20px 24px',
-          display: 'flex',
-          gap: 24
+          paddingTop: 20,
+          paddingBottom: 20,
+          paddingLeft: 192,
+          paddingRight: 16,
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+          overflowX: 'hidden',
+          marginLeft: 0
         }}>
-          {/* Left Sidebar - Filters */}
           <div style={{
-            width: 300,
-            background: colors.panel,
-            borderRadius: 12,
-            padding: 20,
-            height: 'fit-content'
+            display: 'flex',
+            gap: 16,
+            width: '100%',
+            maxWidth: '1400px',
+            margin: '0 auto',
+            overflow: 'hidden',
+            alignItems: 'flex-start'
           }}>
+            {/* Left Sidebar - Filters */}
+            <div style={{
+              width: 240,
+              minWidth: 240,
+              maxWidth: 240,
+              background: colors.panel,
+              borderRadius: 12,
+              padding: 16,
+              height: 'fit-content',
+              flexShrink: 0,
+              boxSizing: 'border-box'
+            }}>
             {/* Product Status Filter */}
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: 20 }}>
               <h3 style={{
                 color: colors.text,
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: 600,
-                marginBottom: 12
+                marginBottom: 10
               }}>
                 Product Status
               </h3>
@@ -1520,12 +1538,12 @@ export default function Inventory() {
     </div>
 
             {/* Search Filter */}
-            <div style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: 16 }}>
               <label style={{
                 color: colors.text,
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: 500,
-                marginBottom: 8,
+                marginBottom: 6,
                 display: 'block'
               }}>
                 Search
@@ -1537,12 +1555,13 @@ export default function Inventory() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: 12,
+                  maxWidth: '100%',
+                  padding: 10,
                   background: colors.bg,
                   border: `1px solid ${colors.muted}`,
                   borderRadius: 6,
                   color: colors.text,
-                  fontSize: 14,
+                  fontSize: 13,
                   outline: 'none',
                   boxSizing: 'border-box'
                 }}
@@ -1550,11 +1569,11 @@ export default function Inventory() {
             </div>
 
             {/* Category Filter */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <label style={{
                   color: colors.text,
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: 500,
                   display: 'block'
                 }}>
@@ -1568,9 +1587,9 @@ export default function Inventory() {
                       background: colors.accent,
                       color: '#333333',
                       border: 'none',
-                      padding: '6px 12px',
+                      padding: '4px 10px',
                       borderRadius: 4,
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: 500,
                       cursor: 'pointer',
                       transition: 'background 0.2s ease'
@@ -1578,7 +1597,7 @@ export default function Inventory() {
                     onMouseEnter={(e) => e.target.style.background = '#E8A8C8'}
                     onMouseLeave={(e) => e.target.style.background = colors.accent}
                   >
-                    + Add Category
+                    + Add
                   </button>
                 )}
               </div>
@@ -1587,13 +1606,15 @@ export default function Inventory() {
                 onChange={(e) => setCategoryFilter(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: 12,
+                  maxWidth: '100%',
+                  padding: 10,
                   background: colors.bg,
                   border: `1px solid ${colors.muted}`,
                   borderRadius: 6,
                   color: colors.text,
-                  fontSize: 14,
-                  outline: 'none'
+                  fontSize: 13,
+                  outline: 'none',
+                  boxSizing: 'border-box'
                 }}
               >
                 <option value="All">All</option>
@@ -1604,12 +1625,12 @@ export default function Inventory() {
             </div>
 
             {/* Stock Filter */}
-            <div style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: 16 }}>
               <label style={{
                 color: colors.text,
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: 500,
-                marginBottom: 8,
+                marginBottom: 6,
                 display: 'block'
               }}>
                 Stock
@@ -1619,13 +1640,15 @@ export default function Inventory() {
                 onChange={(e) => setStockFilter(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: 12,
+                  maxWidth: '100%',
+                  padding: 10,
                   background: colors.bg,
                   border: `1px solid ${colors.muted}`,
                   borderRadius: 6,
                   color: colors.text,
-                  fontSize: 14,
-                  outline: 'none'
+                  fontSize: 13,
+                  outline: 'none',
+                  boxSizing: 'border-box'
                 }}
               >
                 <option value="All">All</option>
@@ -1636,12 +1659,12 @@ export default function Inventory() {
             </div>
 
             {/* Price Range */}
-            <div style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: 16 }}>
               <label style={{
                 color: colors.text,
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: 500,
-                marginBottom: 8,
+                marginBottom: 6,
                 display: 'block'
               }}>
                 Price Range
@@ -1655,12 +1678,12 @@ export default function Inventory() {
                   style={{
                     flex: 1,
                     minWidth: 0,
-                    padding: 12,
+                    padding: 10,
                     background: colors.bg,
                     border: `1px solid ${colors.muted}`,
                     borderRadius: 6,
                     color: colors.text,
-                    fontSize: 14,
+                    fontSize: 13,
                     outline: 'none',
                     boxSizing: 'border-box'
                   }}
@@ -1673,12 +1696,12 @@ export default function Inventory() {
                   style={{
                     flex: 1,
                     minWidth: 0,
-                    padding: 12,
+                    padding: 10,
                     background: colors.bg,
                     border: `1px solid ${colors.muted}`,
                     borderRadius: 6,
                     color: colors.text,
-                    fontSize: 14,
+                    fontSize: 13,
                     outline: 'none',
                     boxSizing: 'border-box'
                   }}
@@ -1691,15 +1714,17 @@ export default function Inventory() {
               onClick={handleResetFilters}
               style={{
                 width: '100%',
+                maxWidth: '100%',
                 background: colors.accent,
                 color: '#333333',
                 border: 'none',
-                padding: '12px 16px',
+                padding: '10px 14px',
                 borderRadius: 6,
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: 600,
                 cursor: 'pointer',
-                transition: 'background 0.2s ease'
+                transition: 'background 0.2s ease',
+                boxSizing: 'border-box'
               }}
               onMouseEnter={(e) => e.target.style.background = '#E8A8C8'}
               onMouseLeave={(e) => e.target.style.background = colors.accent}
@@ -1709,7 +1734,7 @@ export default function Inventory() {
           </div>
 
           {/* Right Side - Inventory List */}
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
             {/* Header */}
             <div style={{ 
               display: 'flex', 
@@ -1761,7 +1786,10 @@ export default function Inventory() {
             <div style={{
               background: colors.panel,
               borderRadius: 12,
-              overflow: 'hidden'
+              overflow: 'hidden',
+              width: '100%',
+              maxWidth: '100%',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
             }}>
               {filteredItems.length === 0 ? (
                 <div style={{
@@ -1782,22 +1810,31 @@ export default function Inventory() {
               ) : (
                 filteredItems.map((item, index) => (
                   <div key={item.id} style={{
-                    padding: 20,
+                    padding: '16px 20px',
                     borderBottom: index < filteredItems.length - 1 ? `1px solid ${colors.line}` : 'none',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 16
-                  }}>
+                    gap: 12,
+                    minWidth: 0,
+                    maxWidth: '100%',
+                    transition: 'background 0.2s ease',
+                    cursor: 'pointer'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#3D4142'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
                     {/* Product Image */}
                     <div style={{
                       width: 60,
                       height: 60,
+                      minWidth: 60,
                       background: colors.bg,
                       borderRadius: 8,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      overflow: 'hidden'
+                      overflow: 'hidden',
+                      flexShrink: 0
                     }}>
                       <img 
                         src={item.image} 
@@ -1823,19 +1860,29 @@ export default function Inventory() {
                     </div>
 
                     {/* Product Info */}
-                    <div style={{ flex: 1 }}>
+                    <div style={{ 
+                      flex: 1, 
+                      minWidth: 0,
+                      overflow: 'hidden' 
+                    }}>
                       <h3 style={{
                         color: colors.text,
                         fontSize: 16,
                         fontWeight: 600,
-                        marginBottom: 4
+                        marginBottom: 4,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
                       }}>
                         {item.name}
                       </h3>
                       <p style={{
                         color: colors.muted,
                         fontSize: 14,
-                        marginBottom: 8
+                        marginBottom: 8,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
                       }}>
                         Stocked Product: {item.quantity} In Stock
                       </p>
@@ -1846,21 +1893,28 @@ export default function Inventory() {
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 4,
-                      marginRight: 16
+                      marginRight: 8,
+                      flexShrink: 1,
+                      minWidth: 150,
+                      maxWidth: 200
                     }}>
-                      <div style={{ color: colors.muted, fontSize: 12 }}>
+                      <div style={{ color: colors.muted, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         Status: <span style={{ color: colors.text }}>{item.availability || item.status}</span>
                       </div>
-                      <div style={{ color: colors.muted, fontSize: 12 }}>
+                      <div style={{ color: colors.muted, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         Category: <span style={{ color: colors.text }}>{item.category?.name || item.category}</span>
                       </div>
-                      <div style={{ color: colors.muted, fontSize: 12 }}>
-                        Retail Price: <span style={{ color: colors.text }}>${item.priceCents ? (item.priceCents / 100).toFixed(2) : (item.price || 0).toFixed(2)}</span>
+                      <div style={{ color: colors.muted, fontSize: 12, whiteSpace: 'nowrap' }}>
+                        Price: <span style={{ color: colors.text, fontWeight: 600 }}>${item.priceCents ? (item.priceCents / 100).toFixed(2) : (item.price || 0).toFixed(2)}</span>
                       </div>
                     </div>
 
                     {/* Action Buttons - Role-based access */}
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      gap: 8,
+                      flexShrink: 0 
+                    }}>
                       {/* Edit Button - Available for ADMIN and STAFF */}
                       {(user?.role === 'ADMIN' || user?.role === 'STAFF') && (
                         <button
@@ -1913,6 +1967,7 @@ export default function Inventory() {
                 ))
               )}
             </div>
+          </div>
           </div>
         </main>
       </div>
