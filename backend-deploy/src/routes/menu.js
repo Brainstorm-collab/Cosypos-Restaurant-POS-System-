@@ -164,22 +164,32 @@ router.delete('/categories/:id', requireAnyAuth(), async (req, res) => {
       });
     }
     
-    // If force delete is requested, delete all items first
+    // If force delete is requested, delete all items first - use transaction for atomicity
     if (force === 'true' && categoryWithItems.items.length > 0) {
       console.log(`🗑️ Cascade deleting ${categoryWithItems.items.length} items from category: ${categoryWithItems.name}`);
       
-      // Delete all menu items in this category
-      await prisma.menuItem.deleteMany({
-        where: { categoryId: id }
+      try {
+        // Execute both deletes in a transaction to ensure atomicity
+        await prisma.$transaction([
+          prisma.menuItem.deleteMany({
+            where: { categoryId: id }
+          }),
+          prisma.menuCategory.delete({
+            where: { id }
+          })
+        ]);
+        
+        console.log(`✅ Deleted ${categoryWithItems.items.length} menu items and category in transaction`);
+      } catch (transactionError) {
+        console.error('❌ Transaction failed - no changes committed:', transactionError);
+        throw transactionError;
+      }
+    } else {
+      // No items to delete, just delete the category
+      await prisma.menuCategory.delete({
+        where: { id }
       });
-      
-      console.log(`✅ Deleted ${categoryWithItems.items.length} menu items`);
     }
-    
-    // Now delete the category
-    await prisma.menuCategory.delete({
-      where: { id }
-    });
     
     // Clear cache when data changes
     cache.clearPattern('categories:');
@@ -246,7 +256,7 @@ router.get('/menu-items', etagMiddleware, async (req, res) => {
       description: item.description || '',
       priceCents: item.priceCents,
       price: `$${(item.priceCents / 100).toFixed(2)}`,
-      category: { name: item.category.name },
+      category: { name: item.category?.name || 'Uncategorized' },
       categoryId: item.categoryId,
       stock: item.stock,
       available: item.available,
@@ -452,7 +462,7 @@ router.put('/menu-items/:id', requireAnyAuth(), async (req, res) => {
     if (error.code === 'P2025') {
       res.status(404).json({ error: 'Menu item not found' });
     } else {
-      res.status(500).json({ error: `Failed to update menu item: ${error.message}` });
+      res.status(500).json({ error: 'Failed to update menu item' });
     }
   }
 });

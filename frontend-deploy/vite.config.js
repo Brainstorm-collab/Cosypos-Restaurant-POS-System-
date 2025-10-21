@@ -5,14 +5,9 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    // Enable HMR optimization
-    hmr: {
-      overlay: false // Disable error overlay for better performance
-    },
     // Enable faster file watching
     watch: {
-      usePolling: false,
-      interval: 100
+      usePolling: false
     },
     proxy: {
       '/api': {
@@ -25,7 +20,7 @@ export default defineConfig({
           proxy.on('error', (err, _req, _res) => {
             console.log('proxy error', err);
           });
-        },
+        }
       },
       '/uploads': {
         target: 'http://localhost:4000',
@@ -37,7 +32,7 @@ export default defineConfig({
           proxy.on('error', (err, _req, _res) => {
             console.log('proxy error', err);
           });
-        },
+        }
       }
     }
   },
@@ -62,23 +57,15 @@ export default defineConfig({
       compress: {
         pure_funcs: ['console.log', 'console.debug', 'console.info'],
         drop_debugger: true,
-        drop_console: true // Remove console logs in production
       }
     },
     // Optimize chunk size
     chunkSizeWarningLimit: 1000,
-    // Enable source maps for debugging
-    sourcemap: false // Disable in production for better performance
+    // Source maps disabled in production for better performance and smaller bundle size
+    sourcemap: false
   },
   // Enable pre-bundling for faster dev
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom', 'lucide-react', 'react-icons', 'recharts'],
-    // Force pre-bundling of common dependencies
-    force: true
-  },
-  // Performance optimizations
-  esbuild: {
-    // Remove console logs in production
-    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : []
+    include: ['react', 'react-dom', 'react-router-dom', 'lucide-react', 'react-icons', 'recharts']
   }
-})
+});

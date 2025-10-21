@@ -44,6 +44,11 @@ router.get('/', requireAnyAuth(), async (req, res) => {
 // Get all staff members (admin and staff can view)
 router.get('/staff', requireAnyAuth(), async (req, res) => {
   try {
+    // Server-side authorization check - only ADMIN and STAFF can view staff list
+    if (!req.user || !['ADMIN', 'STAFF'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Forbidden: Only admins and staff can view staff list' });
+    }
+    
     const users = await prisma.user.findMany({
       where: {
         role: {
@@ -163,8 +168,20 @@ router.post('/', requireAnyAuth(), async (req, res) => {
         passwordHash,
         role: userRole,
         phone,
-        age: age ? parseInt(age) : null,
-        salary: salary ? parseFloat(salary) : null,
+        age: age ? (() => {
+          const parsedAge = parseInt(age);
+          if (isNaN(parsedAge) || parsedAge < 0 || parsedAge > 120) {
+            throw new Error('Age must be between 0 and 120');
+          }
+          return parsedAge;
+        })() : null,
+        salary: salary ? (() => {
+          const parsedSalary = parseFloat(salary);
+          if (isNaN(parsedSalary) || !isFinite(parsedSalary) || parsedSalary < 0 || parsedSalary > 1000000) {
+            throw new Error('Salary must be between 0 and 1,000,000');
+          }
+          return parsedSalary;
+        })() : null,
         timings,
         permissions: JSON.stringify(defaultPermissions)
       },
@@ -251,17 +268,65 @@ router.put('/:id', requireAnyAuth(), async (req, res) => {
       return res.status(400).json({ error: 'Invalid role. Must be ADMIN, SUBADMIN, STAFF, or USER.' });
     }
 
-    // Build update data
+    // Build update data with validation
     const updateData = {};
-    if (name !== undefined) updateData.name = name;
-    if (email !== undefined) updateData.email = email;
-    if (phone !== undefined) updateData.phone = phone;
-    if (age !== undefined) updateData.age = age ? parseInt(age) : null;
-    if (salary !== undefined) updateData.salary = salary ? parseFloat(salary) : null;
-    if (timings !== undefined) updateData.timings = timings;
+    if (name !== undefined) updateData.name = String(name).trim();
+    
+    if (email !== undefined) {
+      const trimmedEmail = String(email).trim().toLowerCase();
+      // Basic email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(trimmedEmail)) {
+        return res.status(400).json({ error: 'Invalid email format' });
+      }
+      updateData.email = trimmedEmail;
+    }
+    
+    if (phone !== undefined) {
+      const trimmedPhone = String(phone).trim();
+      // Validate phone is alphanumeric/dashes/spaces/parens/plus
+      if (trimmedPhone && !/^[\d\s\-+()]+$/.test(trimmedPhone)) {
+        return res.status(400).json({ error: 'Invalid phone format' });
+      }
+      updateData.phone = trimmedPhone;
+    }
+    
+    if (age !== undefined) {
+      if (age) {
+        const parsedAge = parseInt(age);
+        if (isNaN(parsedAge) || parsedAge < 0 || parsedAge > 120) {
+          return res.status(400).json({ error: 'Age must be between 0 and 120' });
+        }
+        updateData.age = parsedAge;
+      } else {
+        updateData.age = null;
+      }
+    }
+    
+    if (salary !== undefined) {
+      if (salary) {
+        const parsedSalary = parseFloat(salary);
+        if (isNaN(parsedSalary) || !isFinite(parsedSalary) || parsedSalary < 0 || parsedSalary > 1000000) {
+          return res.status(400).json({ error: 'Salary must be between 0 and 1,000,000' });
+        }
+        updateData.salary = parsedSalary;
+      } else {
+        updateData.salary = null;
+      }
+    }
+    
+    if (timings !== undefined) updateData.timings = String(timings).trim();
     if (role !== undefined) updateData.role = role;
+    
     if (permissions !== undefined) {
-      console.log('🔄 Updating permissions for user', id, ':', permissions);
+      // Validate permissions is an array
+      if (!Array.isArray(permissions)) {
+        return res.status(400).json({ error: 'Permissions must be an array' });
+      }
+      // Validate each permission is a string
+      if (!permissions.every(p => typeof p === 'string')) {
+        return res.status(400).json({ error: 'Each permission must be a string' });
+      }
       updateData.permissions = permissions;
     }
     
@@ -269,8 +334,6 @@ router.put('/:id', requireAnyAuth(), async (req, res) => {
     if (password) {
       updateData.passwordHash = await bcrypt.hash(password, 10);
     }
-
-    console.log('📝 Updating user with data:', updateData);
     
     const user = await prisma.user.update({
       where: { id },
@@ -290,8 +353,6 @@ router.put('/:id', requireAnyAuth(), async (req, res) => {
         updatedAt: true
       }
     });
-    
-    console.log('✅ User updated successfully. Permissions:', user.permissions);
 
     res.json(user);
   } catch (error) {

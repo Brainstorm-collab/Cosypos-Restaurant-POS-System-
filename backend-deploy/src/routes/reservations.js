@@ -83,12 +83,12 @@ router.get('/', async (req, res) => {
 
 // Get reservations by date and floor
 router.get('/by-date-floor', async (req, res) => {
-  // Disable caching to ensure real-time updates
-  res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.set('Pragma', 'no-cache');
-  res.set('Expires', '0');
-  
   try {
+    // Disable caching to ensure real-time updates
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    
     const { date, floor } = req.query;
     
     if (!date || !floor) {

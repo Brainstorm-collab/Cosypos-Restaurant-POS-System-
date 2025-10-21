@@ -10,7 +10,11 @@ class ApiClient {
   // Create a cache key from URL and options
   getCacheKey(url, options = {}) {
     const method = options.method || 'GET';
-    const body = options.body ? JSON.stringify(options.body) : '';
+    // Use raw string if body is already a string, otherwise stringify
+    let body = '';
+    if (options.body) {
+      body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+    }
     return `${method}:${url}:${body}`;
   }
 
@@ -45,8 +49,13 @@ class ApiClient {
       // Don't set Content-Type for FormData - let browser set it with boundary
       const headers = { ...options.headers };
       
+      // Check for Content-Type case-insensitively
+      const hasContentType = Object.keys(headers).some(
+        key => key.toLowerCase() === 'content-type'
+      );
+      
       // Only set Content-Type to JSON if not already set and body is not FormData
-      if (!headers['Content-Type'] && !(options.body instanceof FormData)) {
+      if (!hasContentType && !(options.body instanceof FormData)) {
         headers['Content-Type'] = 'application/json';
       }
       
@@ -66,7 +75,6 @@ class ApiClient {
       throw error;
     }
   }
-
   // Main request method with caching and deduplication
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
@@ -100,14 +108,15 @@ class ApiClient {
       };
     }
 
-    // Add cache-busting headers to force fresh data
-    options.headers = {
-      ...options.headers,
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    };
-
+    // Add cache-busting headers only for non-static endpoints
+    if (!shouldCache) {
+      options.headers = {
+        ...options.headers,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      };
+    }
     // Create request promise with custom timeout if provided
     const timeout = options.timeout || this.defaultTimeout;
     const requestPromise = this.fetchWithTimeout(url, options, timeout)

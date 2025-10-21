@@ -10,14 +10,20 @@ function etagMiddleware(req, res, next) {
   const originalJson = res.json;
   
   res.json = function(data) {
-    // Generate ETag from data
+    // Serialize once to avoid double JSON.stringify
+    const jsonString = JSON.stringify(data);
+    
+    // Generate ETag from serialized data
     const etag = crypto
       .createHash('md5')
-      .update(JSON.stringify(data))
+      .update(jsonString)
       .digest('hex');
     
     // Set ETag header
     res.setHeader('ETag', `"${etag}"`);
+    
+    // Set Cache-Control to enable browser validation with If-None-Match
+    res.setHeader('Cache-Control', 'no-cache');
     
     // Check if client has same version
     const clientEtag = req.headers['if-none-match'];
@@ -27,8 +33,9 @@ function etagMiddleware(req, res, next) {
       return res.status(304).end();
     }
     
-    // Data changed - return full response
-    return originalJson.call(this, data);
+    // Data changed - send the serialized string directly
+    res.setHeader('Content-Type', 'application/json');
+    return res.send(jsonString);
   };
   
   next();

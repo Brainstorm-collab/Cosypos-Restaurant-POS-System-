@@ -383,8 +383,7 @@ const Categories = ({
           </div>
         </div>
         {showAddButton && (user?.role === 'ADMIN' || user?.role === 'STAFF') && (
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: '20px' }}>
-            <button 
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>            <button 
               onClick={() => onEditCategory && onEditCategory('bulk')}
               style={{
                 background: 'transparent',

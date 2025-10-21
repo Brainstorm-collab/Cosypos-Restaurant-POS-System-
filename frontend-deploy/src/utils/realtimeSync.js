@@ -8,6 +8,7 @@ class RealtimeSync {
     this.reconnectDelay = 1000;
     this.userOperationInProgress = false;
     this.lastUserOperation = 0;
+    this.refreshIntervalId = null;
   }
 
   // Initialize real-time connection
@@ -30,10 +31,24 @@ class RealtimeSync {
   clearAllCache() {
     console.log('🧹 Clearing ALL cache for real-time updates...');
     
-    // Clear ALL localStorage cache aggressively
+    // Clear localStorage cache using strict key filtering
+    // Only remove keys that match our app's namespace or specific known keys
+    const ALLOWED_KEY_PREFIXES = ['cosypos:', 'cosypos_'];
+    const EXACT_KEYS_TO_CLEAR = [
+      'etag:/api/menu-items',
+      'etag:/api/categories',
+      'cache:/api/menu-items',
+      'cache:/api/categories',
+      'cache:/api/orders'
+    ];
+    
     const keys = Object.keys(localStorage);
     keys.forEach(key => {
-      if (key.includes('menu') || key.includes('category') || key.includes('cosypos') || key.includes('cache') || key.includes('api') || key.includes('data') || key.includes('sync')) {
+      // Check if key matches our strict prefixes or exact keys
+      const matchesPrefix = ALLOWED_KEY_PREFIXES.some(prefix => key.startsWith(prefix));
+      const isExactMatch = EXACT_KEYS_TO_CLEAR.includes(key);
+      
+      if (matchesPrefix || isExactMatch) {
         localStorage.removeItem(key);
       }
     });
@@ -90,10 +105,20 @@ class RealtimeSync {
     });
 
     // Set up periodic refresh (every 30 minutes) for real-time updates
-    setInterval(() => {
+    // Store the interval ID for cleanup
+    this.refreshIntervalId = setInterval(() => {
       console.log('⏰ Periodic real-time refresh (30 minutes)...');
       this.forceRefreshAllData();
     }, 1800000); // 30 minutes instead of 10
+  }
+
+  // Cleanup method to clear the refresh interval
+  cleanup() {
+    if (this.refreshIntervalId) {
+      clearInterval(this.refreshIntervalId);
+      this.refreshIntervalId = null;
+      console.log('🧹 Real-time sync cleanup: interval cleared');
+    }
   }
 
   // Force refresh all data from backend
@@ -138,7 +163,7 @@ class RealtimeSync {
 
   // Broadcast real-time updates
   broadcast(key, data) {
-    console.log(`📡 Broadcasting real-time update for ${key}:`, data.length || 'N/A', 'items');
+    console.log(`📡 Broadcasting real-time update for ${key}:`, data?.length ?? 'N/A', 'items');
     
     const callbacks = this.listeners.get(key);
     if (callbacks) {

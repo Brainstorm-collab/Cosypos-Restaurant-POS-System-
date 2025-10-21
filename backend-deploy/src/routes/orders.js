@@ -7,12 +7,18 @@ const etagMiddleware = require('../middleware/etag-cache');
 // Get all orders
 router.get('/', etagMiddleware, async (req, res) => {
   try {
-    // Check cache first
-    const cacheKey = 'orders:all';
-    const cached = cache.get(cacheKey);
-    if (cached) {
-      console.log('🚀 CACHE HIT! Returning cached orders (instant)');
-      return res.json(cached);
+    // Use versioned cache key to prevent race conditions
+    const version = cache.getVersion('orders');
+    const cacheKey = `orders:${version}:all`;
+    try {
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        console.log(`🚀 CACHE HIT! Returning cached orders (version ${version}, instant)`);
+        return res.json(cached);
+      }
+    } catch (cacheError) {
+      console.error('Cache read error:', cacheError);
+      // Continue to database query
     }
 
     console.log('💾 CACHE MISS - Fetching orders from PostgreSQL (slow - Singapore server)...');
@@ -73,9 +79,14 @@ router.get('/', etagMiddleware, async (req, res) => {
       subtotal: order.totalCents / 100,
       tableLabel: order.table?.label
     }));
-
+    
     // Cache for 2 MINUTES (orders change frequently, but still cache longer)
-    cache.set(cacheKey, transformedOrders, 120000);
+    try {
+      cache.set(cacheKey, transformedOrders, 120000);
+    } catch (cacheError) {
+      console.error('Cache write error:', cacheError);
+      // Continue - data will be returned without caching
+    }
     
     // Allow client caching for 5 seconds
     res.set('Cache-Control', 'public, max-age=5');
@@ -168,8 +179,15 @@ router.post('/', async (req, res) => {
       tableLabel: order.table?.label
     };
 
-    // Clear cache when data changes
-    cache.clearPattern('orders:');
+    // Increment cache version instead of clearing (prevents race conditions)
+    try {
+      cache.incrementVersion('orders');
+      // Also clear old versioned keys for cleanup
+      cache.clearPattern('orders:');
+    } catch (cacheError) {
+      console.error('❌ Cache invalidation failed (orders pattern):', cacheError.message || cacheError);
+      // Continue - order was created successfully, cache will expire naturally
+    }
 
     res.status(201).json(transformedOrder);
   } catch (error) {
@@ -272,8 +290,15 @@ router.put('/:id', async (req, res) => {
       tableLabel: order.table?.label
     };
 
-    // Clear cache when data changes
-    cache.clearPattern('orders:');
+    // Increment cache version instead of clearing (prevents race conditions)
+    try {
+      cache.incrementVersion('orders');
+      // Also clear old versioned keys for cleanup
+      cache.clearPattern('orders:');
+    } catch (cacheError) {
+      console.error('❌ Cache invalidation failed (orders pattern):', cacheError.message || cacheError);
+      // Continue - order was updated successfully, cache will expire naturally
+    }
 
     res.json(transformedOrder);
   } catch (error) {
@@ -297,8 +322,15 @@ router.delete('/:id', async (req, res) => {
       where: { id }
     });
 
-    // Clear cache when data changes
-    cache.clearPattern('orders:');
+    // Increment cache version instead of clearing (prevents race conditions)
+    try {
+      cache.incrementVersion('orders');
+      // Also clear old versioned keys for cleanup
+      cache.clearPattern('orders:');
+    } catch (cacheError) {
+      console.error('❌ Cache invalidation failed (orders pattern):', cacheError.message || cacheError);
+      // Continue - order was deleted successfully, cache will expire naturally
+    }
 
     res.json({ message: 'Order deleted successfully' });
   } catch (error) {

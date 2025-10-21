@@ -30,7 +30,7 @@ export const WebVitalsMonitor = () => {
       console.warn('PerformanceObserver not supported in this browser');
       return;
     }
-
+    
     // Check supported entry types
     const supportedEntryTypes = PerformanceObserver.supportedEntryTypes || [];
     const desiredTypes = ['largest-contentful-paint', 'first-input', 'layout-shift'];
@@ -102,10 +102,9 @@ export const MemoryMonitor = ({
       const limit = Math.round(memory.jsHeapSizeLimit / 1048576);
       const usageRatio = used / limit;
       
-      // Only log if memory usage is high or enough time has passed
-      if (usageRatio > logThreshold || (now - lastLoggedTime) > minLogInterval) {
+      // Only log if memory usage is high
+      if (usageRatio > logThreshold) {
         console.log(`🧠 Memory: ${used}MB / ${total}MB (limit: ${limit}MB)`);
-        lastLoggedTime = now;
         
         // Warn if memory usage is high
         if (usageRatio > 0.9) {
@@ -116,7 +115,6 @@ export const MemoryMonitor = ({
 
     // Log memory usage at specified interval
     const intervalId = setInterval(logMemoryUsage, interval);
-
     return () => clearInterval(intervalId);
   }, [enabled, interval, logThreshold]);
 

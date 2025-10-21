@@ -147,10 +147,9 @@ function AddEditPanel({ open, onClose, initial }) {
       // Add password only for new staff or if changed
       if (!isEdit) {
         staffData.password = password;
-      } else if (password) {
+      } else if (password && password.trim().length > 0) {
         staffData.password = password;
       }
-
       let savedStaff;
       if (isEdit) {
         // Update existing staff - use dbId instead of display id

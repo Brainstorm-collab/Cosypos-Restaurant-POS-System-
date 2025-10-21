@@ -18,15 +18,19 @@ class RequestDeduplicator {
     }
     
     // Start new request and store promise
-    const promise = fn().finally(() => {
-      // Clean up after request completes
+    const timeoutMs = 30000; // 30 seconds
+    const promise = Promise.race([
+      fn(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`Request timeout: ${key}`)), timeoutMs)
+      )
+    ]).finally(() => {
       this.pending.delete(key);
     });
     
     this.pending.set(key, promise);
     return await promise;
-  }
-}
+  }}
 
 const deduplicator = new RequestDeduplicator();
 

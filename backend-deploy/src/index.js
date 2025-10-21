@@ -2,18 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs').promises;
 const compression = require('compression');
-const helmet = require('helmet');
 
 dotenv.config();
 const app = express();
 
 // Performance middleware
 app.use(compression()); // Enable gzip compression
-
-// Completely disable helmet for development
-// app.use(helmet());
 // CORS headers for all requests
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -38,63 +34,129 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Custom image serving route to bypass Express static file CORS issues
-app.get('/uploads/:folder/:filename', (req, res) => {
-  const imagePath = path.join(__dirname, '../uploads', req.params.folder, req.params.filename);
-  
-  // Set aggressive CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS, HEAD');
-  res.setHeader('Access-Control-Allow-Headers', '*');
-  res.setHeader('Access-Control-Allow-Credentials', 'false');
-  res.setHeader('Access-Control-Max-Age', '0');
-  res.setHeader('Access-Control-Expose-Headers', '*');
-  
-  // CRITICAL: Override Cross-Origin-Resource-Policy to allow cross-origin requests
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
-  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-  
-  // Remove all problematic headers
-  res.removeHeader('Clear-Site-Data');
-  res.removeHeader('X-Frame-Options');
-  res.removeHeader('X-Content-Type-Options');
-  res.removeHeader('X-DNS-Prefetch-Control');
-  res.removeHeader('X-Download-Options');
-  res.removeHeader('X-Permitted-Cross-Domain-Policies');
-  res.removeHeader('X-XSS-Protection');
-  res.removeHeader('Strict-Transport-Security');
-  res.removeHeader('Referrer-Policy');
-  
-  // Set no-cache headers
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.setHeader('Vary', '*');
-  
-  // Check if file exists
-  if (fs.existsSync(imagePath)) {
-    res.sendFile(imagePath);
-  } else {
-    res.status(404).json({ error: 'Image not found' });
+// Secure image serving route with path traversal protection
+app.get('/uploads/:folder/:filename', async (req, res) => {
+  try {
+    const folder = req.params.folder;
+    const filename = req.params.filename;
+    
+    // Security: Validate folder and filename to prevent path traversal
+    const allowedFolders = ['menu-items', 'categories', 'profiles'];
+    if (!allowedFolders.includes(folder)) {
+      return res.status(400).json({ error: 'Invalid folder' });
+    }
+    
+    // Reject path traversal attempts (../ or ..\\ or absolute paths)
+    if (folder.includes('..') || folder.includes('/') || folder.includes('\\') ||
+        filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      console.warn('⚠️ Path traversal attempt detected:', { folder, filename });
+      return res.status(400).json({ error: 'Invalid path' });
+    }
+    
+    // Only allow safe filename characters
+    const safeFilenameRegex = /^[a-zA-Z0-9._-]+$/;
+    if (!safeFilenameRegex.test(filename)) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+    
+    // Build the safe path
+    const uploadsRoot = path.resolve(__dirname, '../uploads');
+    const imagePath = path.join(uploadsRoot, folder, filename);
+    
+    // Verify the resolved path is within uploads directory (prevent escaping)
+    if (!imagePath.startsWith(uploadsRoot)) {
+      console.warn('⚠️ Path escape attempt detected:', imagePath);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Set CORS headers for images
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+    res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+    
+    // Set caching headers for static images (1 hour cache)
+    res.setHeader('Cache-Control', 'public, max-age=3600, immutable');
+    
+    // Check if file exists using async file operations
+    try {
+      const stats = await fs.stat(imagePath);
+      if (!stats.isFile()) {
+        return res.status(404).json({ error: 'Not a file' });
+      }
+      
+      // Send the file
+      res.sendFile(imagePath);
+    } catch (statError) {
+      if (statError.code === 'ENOENT') {
+        res.status(404).json({ error: 'Image not found' });
+      } else {
+        console.error('Error accessing file:', statError);
+        res.status(500).json({ error: 'Server error' });
+      }
+    }
+  } catch (error) {
+    console.error('Error serving image:', error);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
+// Development-only test endpoints
+if (process.env.NODE_ENV === 'development' || process.env.ENABLE_TEST_ENDPOINTS === 'true') {
+  console.log('⚠️ Test endpoints enabled (development mode)');
+  
+  // Test endpoint to verify CORS headers
+  app.get('/test-cors', (req, res) => {
+    console.log('Test CORS route hit');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.json({ message: 'CORS test successful', timestamp: new Date().toISOString() });
+  });
 
-// Test endpoint to verify CORS headers
-app.get('/test-cors', (req, res) => {
-  console.log('Test CORS route hit');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.json({ message: 'CORS test successful', timestamp: new Date().toISOString() });
-});
+  // Simple test route
+  app.get('/test', (req, res) => {
+    console.log('Test route hit');
+    res.json({ message: 'Test route working', timestamp: new Date().toISOString() });
+  });
+  
+  // Test CORS endpoint
+  app.get('/api/cors-test', (_req, res) => {
+    console.log('CORS test endpoint called');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.json({ cors: 'working', timestamp: new Date().toISOString() });
+  });
 
-// Simple test route
-app.get('/test', (req, res) => {
-  console.log('Test route hit');
-  res.json({ message: 'Test route working', timestamp: new Date().toISOString() });
-});
+  // Test deployment endpoint
+  app.get('/api/deployment-test', (_req, res) => {
+    console.log('🚀 Deployment test endpoint called');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.json({ 
+      message: '🎉 DEPLOYMENT TEST SUCCESSFUL!',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      database: 'PostgreSQL',
+      status: 'working'
+    });
+  });
 
+  // Test image endpoint with explicit CORS headers
+  app.get('/api/test-image', (_req, res) => {
+    console.log('🧪 Test image endpoint called');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+    res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+    res.json({ 
+      message: 'Test image endpoint with CORS headers',
+      timestamp: new Date().toISOString(),
+      headers: {
+        'Cross-Origin-Resource-Policy': 'cross-origin',
+        'Cross-Origin-Embedder-Policy': 'unsafe-none',
+        'Cross-Origin-Opener-Policy': 'unsafe-none'
+      }
+    });
+  });
+}
 
 // Handle OPTIONS requests for auth routes specifically
 app.options('/api/auth/login', (req, res) => {
@@ -116,7 +178,6 @@ app.options('/api/auth/register', (req, res) => {
 
 // Additional CORS handler for all API routes
 app.use('/api', (req, res, next) => {
-  console.log('API route CORS handler:', req.method, req.url);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma, Expires');
@@ -124,64 +185,12 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Routes will be loaded below after test endpoints
-
+// Health check endpoint
 app.get('/api/health', (_req, res) => {
-  console.log('Health endpoint called');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma, Expires');
   res.json({ ok: true, ts: new Date().toISOString() });
 });
 
-// Test CORS endpoint
-app.get('/api/cors-test', (_req, res) => {
-  console.log('CORS test endpoint called');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma, Expires');
-  res.json({ cors: 'working', timestamp: new Date().toISOString() });
-});
-
-// Test deployment endpoint - LOCALHOST TO PRODUCTION TEST
-app.get('/api/deployment-test', (_req, res) => {
-  console.log('🚀 Deployment test endpoint called - LOCALHOST TO PRODUCTION WORKFLOW TEST');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma, Expires');
-  res.json({ 
-    message: '🎉 LOCALHOST TO PRODUCTION DEPLOYMENT TEST SUCCESSFUL!',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    database: 'PostgreSQL (Render.com)',
-    status: 'working'
-  });
-});
-
-// Test image endpoint with explicit CORS headers
-app.get('/api/test-image', (_req, res) => {
-  console.log('🧪 Test image endpoint called');
-  
-  // Explicitly set all CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
-  res.setHeader('Access-Control-Allow-Credentials', 'false');
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
-  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-  
-  // Return a simple test response
-  res.json({ 
-    message: 'Test image endpoint with CORS headers',
-    timestamp: new Date().toISOString(),
-    headers: {
-      'Cross-Origin-Resource-Policy': 'cross-origin',
-      'Cross-Origin-Embedder-Policy': 'unsafe-none',
-      'Cross-Origin-Opener-Policy': 'unsafe-none'
-    }
-  });
-});
 // Final middleware to override any restrictive headers
 app.use((req, res, next) => {
   // Override any restrictive CORS headers that might have been set
@@ -192,55 +201,7 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
   res.setHeader('Access-Control-Expose-Headers', '*');
-  res.setHeader('Access-Control-Max-Age', '0');
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
   
-  // Remove problematic headers
-  res.removeHeader('X-Frame-Options');
-  res.removeHeader('X-Content-Type-Options');
-  res.removeHeader('X-DNS-Prefetch-Control');
-  res.removeHeader('X-Download-Options');
-  res.removeHeader('X-Permitted-Cross-Domain-Policies');
-  res.removeHeader('X-XSS-Protection');
-  res.removeHeader('Strict-Transport-Security');
-  res.removeHeader('Referrer-Policy');
-  res.removeHeader('Clear-Site-Data');
-  
-  next();
-});
-
-// Override headers after response is sent
-app.use((req, res, next) => {
-  const originalSend = res.send;
-  res.send = function(data) {
-    // Override headers right before sending
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
-    res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', '*');
-    res.setHeader('Access-Control-Expose-Headers', '*');
-    res.setHeader('Access-Control-Max-Age', '0');
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    
-    // Remove problematic headers
-    res.removeHeader('X-Frame-Options');
-    res.removeHeader('X-Content-Type-Options');
-    res.removeHeader('X-DNS-Prefetch-Control');
-    res.removeHeader('X-Download-Options');
-    res.removeHeader('X-Permitted-Cross-Domain-Policies');
-    res.removeHeader('X-XSS-Protection');
-    res.removeHeader('Strict-Transport-Security');
-    res.removeHeader('Referrer-Policy');
-    res.removeHeader('Clear-Site-Data');
-    
-    return originalSend.call(this, data);
-  };
   next();
 });
 
@@ -254,27 +215,21 @@ app.use('/api/orders', require('./routes/orders'));
 console.log('Orders routes loaded');
 app.use('/api/reservations', require('./routes/reservations'));
 console.log('Reservations routes loaded');
-// Load menu routes at /api/menu for new routes
-app.use('/api/menu', require('./routes/menu'));
-console.log('Menu routes loaded at /api/menu/*');
-// ALSO load menu routes at /api for backward compatibility (frontend uses /api/menu-items, /api/categories)
+
+// Load menu routes at /api (serves both /api/menu-items and /api/categories for backward compatibility)
+// The menu router internally handles routes like /menu-items, /categories
 app.use('/api', require('./routes/menu'));
-console.log('Menu routes ALSO loaded at /api/* for backward compatibility');
+console.log('Menu routes loaded at /api/* (serves /api/menu-items, /api/categories, etc.)');
+
 app.use('/api/inventory', require('./routes/inventory'));
 console.log('Inventory routes loaded');
 app.use('/api/users', require('./routes/users'));
 console.log('Users routes loaded');
 app.use('/api/attendance', require('./routes/attendance'));
 console.log('Attendance routes loaded');
-app.use('/api/cache', require('./routes/cache-control'));
-console.log('Cache control routes loaded');
 console.log('All routes loaded successfully');
 
 const port = Number(process.env.PORT||4000);
-app.listen(port, async () => {
+app.listen(port, () => {
   console.log('API listening on http://localhost:'+port);
-  
-  // Pre-warm cache after server starts
-  const { prewarmCache } = require('./cache-prewarmer');
-  await prewarmCache();
 });

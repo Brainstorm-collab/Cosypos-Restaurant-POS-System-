@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
-import { getCurrentUser } from '../utils/api'
 import performanceAPI from '../utils/performanceApi'
 
 const UserContext = createContext()
@@ -18,13 +17,12 @@ export const UserProvider = ({ children }) => {
 
   const loadUser = useCallback(async () => {
     try {
-      setLoading(true)
       const response = await performanceAPI.getCurrentUserOptimized()
       setUser(response.user)
+      setLoading(false)
     } catch (error) {
       console.error('Failed to load user:', error)
       setUser(null)
-    } finally {
       setLoading(false)
     }
   }, [])
@@ -41,6 +39,7 @@ export const UserProvider = ({ children }) => {
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (token) {
+      // Start loading user data immediately
       loadUser()
     } else {
       setLoading(false)

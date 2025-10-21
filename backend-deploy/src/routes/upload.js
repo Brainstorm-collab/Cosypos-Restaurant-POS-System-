@@ -7,6 +7,52 @@ const { requireAnyAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
+// MIME type mapping for supported image formats
+const MIME_TYPES = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml'
+};
+
+// Secure helper function to serve images with path validation
+function serveSecureImage(req, res, filePath) {
+  const uploadsDir = path.join(__dirname, '../../uploads');
+  
+  // Resolve and normalize the path to prevent directory traversal
+  const resolvedPath = path.resolve(uploadsDir, filePath);
+  
+  // Security check: ensure resolved path is within uploads directory
+  if (!resolvedPath.startsWith(uploadsDir)) {
+    console.error('⚠️ Security: Path traversal attempt blocked:', filePath);
+    return res.status(403).json({ error: 'Access denied: Invalid path' });
+  }
+  
+  // Validate file exists
+  if (!fs.existsSync(resolvedPath)) {
+    console.log('Image not found:', resolvedPath);
+    return res.status(404).json({ error: 'Image not found' });
+  }
+  
+  // Determine MIME type from file extension
+  const ext = path.extname(resolvedPath).toLowerCase();
+  const mimeType = MIME_TYPES[ext] || 'application/octet-stream';
+  
+  // Set secure CORS headers (specific origin in production)
+  res.setHeader('Access-Control-Allow-Origin', '*'); // TODO: Use specific origin in production
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Content-Type', mimeType);
+  
+  // Enable caching for static images (1 hour)
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  
+  // Serve the file
+  console.log('Serving secure image:', resolvedPath);
+  res.sendFile(resolvedPath);
+}
+
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -220,143 +266,83 @@ router.get('/uploads/menu-items/:filename', (req, res) => {
   }
 });
 
-// Proxy endpoint for images to bypass CORS issues
-router.get('/proxy-image/:imagePath', (req, res) => {
+// Secure proxy endpoint for images
+router.get('/proxy-image/:imagePath', requireAnyAuth(), (req, res) => {
   const imagePath = req.params.imagePath;
-  const fullPath = path.join(__dirname, '../../uploads', imagePath);
-  
-  console.log('Proxy request for image:', imagePath);
-  console.log('Full path:', fullPath);
-  
-  // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Content-Type', 'image/jpeg');
-  
-  // Check if file exists
-  if (fs.existsSync(fullPath)) {
-    console.log('Serving image:', fullPath);
-    res.sendFile(fullPath);
-  } else {
-    console.log('Image not found:', fullPath);
-    res.status(404).json({ error: 'Image not found', path: fullPath });
+  // Validate input - reject paths with .. or other suspicious patterns
+  if (imagePath.includes('..') || imagePath.includes('~') || /[<>:"|?*]/.test(imagePath)) {
+    return res.status(400).json({ error: 'Invalid image path' });
   }
+  serveSecureImage(req, res, imagePath);
 });
 
-// Alternative proxy endpoint with different pattern
-router.get('/image-proxy/:folder/:filename', (req, res) => {
+// Secure proxy endpoint with folder/filename pattern
+router.get('/image-proxy/:folder/:filename', requireAnyAuth(), (req, res) => {
   const { folder, filename } = req.params;
-  const fullPath = path.join(__dirname, '../../uploads', folder, filename);
-  
-  console.log('Alternative proxy request for image:', folder, filename);
-  console.log('Full path:', fullPath);
-  
-  // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Content-Type', 'image/jpeg');
-  
-  // Check if file exists
-  if (fs.existsSync(fullPath)) {
-    console.log('Serving image:', fullPath);
-    res.sendFile(fullPath);
-  } else {
-    console.log('Image not found:', fullPath);
-    res.status(404).json({ error: 'Image not found', path: fullPath });
+  // Validate inputs - reject suspicious patterns
+  if (folder.includes('..') || filename.includes('..') || 
+      /[<>:"|?*]/.test(folder) || /[<>:"|?*]/.test(filename)) {
+    return res.status(400).json({ error: 'Invalid path parameters' });
   }
+  serveSecureImage(req, res, path.join(folder, filename));
 });
 
-// Test endpoint to list available images
-router.get('/test-images', (req, res) => {
+// Secure test endpoint to list available images (admin only, for debugging)
+router.get('/test-images', requireAnyAuth(), async (req, res) => {
+  // Only allow admins to access this debugging endpoint
+  if (req.user.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
   const uploadsDir = path.join(__dirname, '../../uploads');
   
   try {
-    const files = fs.readdirSync(uploadsDir, { recursive: true });
+    // Use async readdir instead of blocking readdirSync
+    const fs_promises = require('fs').promises;
+    const files = await fs_promises.readdir(uploadsDir, { recursive: true });
     const imageFiles = files.filter(file => 
       typeof file === 'string' && 
-      (file.endsWith('.jpg') || file.endsWith('.jpeg') || file.endsWith('.png'))
+      (file.endsWith('.jpg') || file.endsWith('.jpeg') || file.endsWith('.png') || 
+       file.endsWith('.gif') || file.endsWith('.webp'))
     );
     
+    // Return count and limited info, not full paths
     res.json({
-      uploadsDir,
-      files: imageFiles,
-      count: imageFiles.length
+      count: imageFiles.length,
+      categories: {
+        profiles: imageFiles.filter(f => f.startsWith('profiles')).length,
+        categories: imageFiles.filter(f => f.startsWith('categories')).length,
+        menuItems: imageFiles.filter(f => f.startsWith('menu-items')).length
+      }
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to read uploads directory', message: error.message });
+    console.error('Error reading uploads directory:', error);
+    res.status(500).json({ error: 'Failed to read uploads directory' });
   }
 });
 
-// Simple image proxy endpoint
-router.get('/image/:folder/:filename', (req, res) => {
+// Secure image serving endpoint
+router.get('/image/:folder/:filename', requireAnyAuth(), (req, res) => {
   const { folder, filename } = req.params;
-  const imagePath = path.join(__dirname, '../../uploads', folder, filename);
-  
-  console.log('Serving image:', imagePath);
-  
-  // Set aggressive CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', '*');
-  res.setHeader('Access-Control-Expose-Headers', '*');
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  
-  // Remove problematic headers
-  res.removeHeader('X-Frame-Options');
-  res.removeHeader('X-Content-Type-Options');
-  res.removeHeader('X-DNS-Prefetch-Control');
-  res.removeHeader('X-Download-Options');
-  res.removeHeader('X-Permitted-Cross-Domain-Policies');
-  res.removeHeader('X-XSS-Protection');
-  res.removeHeader('Strict-Transport-Security');
-  res.removeHeader('Referrer-Policy');
-  res.removeHeader('Cross-Origin-Opener-Policy');
-  
-  if (fs.existsSync(imagePath)) {
-    res.sendFile(imagePath);
-  } else {
-    res.status(404).json({ error: 'Image not found', path: imagePath });
+  // Validate inputs - reject suspicious patterns
+  if (folder.includes('..') || filename.includes('..') || 
+      /[<>:"|?*]/.test(folder) || /[<>:"|?*]/.test(filename)) {
+    return res.status(400).json({ error: 'Invalid path parameters' });
   }
+  serveSecureImage(req, res, path.join(folder, filename));
 });
 
-// Alternative image proxy endpoint with different path
-router.get('/proxy/:folder/:filename', (req, res) => {
+// Secure proxy endpoint with different path pattern
+router.get('/proxy/:folder/:filename', requireAnyAuth(), (req, res) => {
   const { folder, filename } = req.params;
-  const imagePath = path.join(__dirname, '../../uploads', folder, filename);
-  
-  console.log('Serving image via proxy:', imagePath);
-  
-  // Set aggressive CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', '*');
-  res.setHeader('Access-Control-Expose-Headers', '*');
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  
-  // Remove problematic headers
-  res.removeHeader('X-Frame-Options');
-  res.removeHeader('X-Content-Type-Options');
-  res.removeHeader('X-DNS-Prefetch-Control');
-  res.removeHeader('X-Download-Options');
-  res.removeHeader('X-Permitted-Cross-Domain-Policies');
-  res.removeHeader('X-XSS-Protection');
-  res.removeHeader('Strict-Transport-Security');
-  res.removeHeader('Referrer-Policy');
-  res.removeHeader('Cross-Origin-Opener-Policy');
-  
-  if (fs.existsSync(imagePath)) {
-    res.sendFile(imagePath);
-  } else {
-    res.status(404).json({ error: 'Image not found', path: imagePath });
+  // Validate inputs - reject suspicious patterns
+  if (folder.includes('..') || filename.includes('..') || 
+      /[<>:"|?*]/.test(folder) || /[<>:"|?*]/.test(filename)) {
+    return res.status(400).json({ error: 'Invalid path parameters' });
   }
+  serveSecureImage(req, res, path.join(folder, filename));
 });
 
 module.exports = router;
+
+

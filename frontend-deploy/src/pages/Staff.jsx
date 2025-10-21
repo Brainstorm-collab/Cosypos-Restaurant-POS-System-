@@ -338,8 +338,8 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user, attendanceStatus, onSt
         flexShrink: 0
       }}>
         <div style={{ 
-          width: 16,
-          height: 16,
+          width: 14,
+          height: 14,
           border: '1px solid #FFFFFF',
           borderRadius: 2
         }} />
@@ -347,12 +347,12 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user, attendanceStatus, onSt
       
       {/* ID */}
       <div style={{ 
-        width: 50,
+        width: 45,
         fontFamily: 'Poppins',
         fontWeight: 400,
         fontSize: 14,
         color: '#FFFFFF',
-        marginRight: 20,
+        marginRight: 15,
         flexShrink: 0
       }}>
         {staff.id}
@@ -360,11 +360,11 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user, attendanceStatus, onSt
       
       {/* Name and Role with Profile Picture */}
       <div style={{ 
-        width: 220,
+        width: 180,
         display: 'flex',
         alignItems: 'center',
         gap: 10,
-        marginRight: 20,
+        marginRight: 15,
         flexShrink: 0
       }}>
         {/* Profile Picture */}
@@ -430,12 +430,12 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user, attendanceStatus, onSt
       
       {/* Email */}
       <div style={{ 
-        width: 200,
+        width: 160,
         fontFamily: 'Poppins',
         fontWeight: 400,
         fontSize: 13,
         color: '#FFFFFF',
-        marginRight: 20,
+        marginRight: 15,
         flexShrink: 0,
         whiteSpace: 'nowrap',
         overflow: 'hidden',
@@ -446,12 +446,12 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user, attendanceStatus, onSt
       
       {/* Phone */}
       <div style={{ 
-        width: 130,
+        width: 110,
         fontFamily: 'Poppins',
         fontWeight: 400,
         fontSize: 13,
         color: staff.phone ? '#FFFFFF' : '#777979',
-        marginRight: 20,
+        marginRight: 15,
         flexShrink: 0
       }}>
         {staff.phone || '-'}
@@ -459,13 +459,13 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user, attendanceStatus, onSt
       
       {/* Age */}
       <div style={{ 
-        width: 60,
+        width: 50,
         fontFamily: 'Poppins',
         fontWeight: 400,
         fontSize: 13,
         color: staff.age ? '#FFFFFF' : '#777979',
         textAlign: 'center',
-        marginRight: 20,
+        marginRight: 15,
         flexShrink: 0
       }}>
         {staff.age || '-'}
@@ -473,13 +473,13 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user, attendanceStatus, onSt
       
       {/* Salary */}
       <div style={{ 
-        width: 90,
+        width: 75,
         fontFamily: 'Poppins',
         fontWeight: 400,
         fontSize: 13,
         color: staff.salary ? '#FFFFFF' : '#777979',
         textAlign: 'right',
-        marginRight: 20,
+        marginRight: 15,
         flexShrink: 0
       }}>
         {staff.salary || '-'}
@@ -487,13 +487,13 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user, attendanceStatus, onSt
       
       {/* Timings */}
       <div style={{ 
-        width: 100,
+        width: 85,
         fontFamily: 'Poppins',
         fontWeight: 400,
         fontSize: 13,
         color: staff.timings ? '#FFFFFF' : '#777979',
         textAlign: 'center',
-        marginRight: 20,
+        marginRight: 15,
         flexShrink: 0
       }}>
         {staff.timings || '-'}
@@ -1392,7 +1392,7 @@ export default function Staff() {
           ) : activeTab === 'management' ? (
             <div style={{ 
               width: '100%', 
-              maxWidth: '1400px',
+              maxWidth: '1200px',
               margin: '0 auto',
               overflowX: 'auto',
               overflowY: 'visible',
@@ -1400,7 +1400,7 @@ export default function Staff() {
               borderRadius: 10,
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
             }}>
-              <div style={{ minWidth: 1100, width: '100%' }}>
+              <div style={{ minWidth: 950, width: '100%' }}>
                 {/* Column Headers */}
                 <div style={{ 
                   width: '100%',
@@ -1414,82 +1414,79 @@ export default function Staff() {
                   boxSizing: 'border-box'
                 }}>
                   {/* Checkbox column */}
-                  <div style={{ width: 20, marginRight: 20 }}></div>
+                  <div style={{ width: 20, marginRight: 15 }}></div>
                   
                   {/* ID */}
                   <div style={{ 
-                    width: 60,
+                    width: 45,
                     fontFamily: 'Poppins',
                     fontWeight: 500,
                     fontSize: 14,
                     color: '#FFFFFF',
-                    marginRight: 30
+                    marginRight: 15
                   }}>ID</div>
                   
                   {/* Name */}
                   <div style={{ 
-                    width: 200,
+                    width: 180,
                     fontFamily: 'Poppins',
                     fontWeight: 500,
                     fontSize: 14,
                     color: '#FFFFFF',
-                    marginRight: 30
+                    marginRight: 15
                   }}>Name</div>
                   
                   {/* Email */}
                   <div style={{ 
-                    width: 200,
+                    width: 160,
                     fontFamily: 'Poppins',
                     fontWeight: 500,
                     fontSize: 14,
                     color: '#FFFFFF',
-                    marginRight: 30
+                    marginRight: 15
                   }}>Email</div>
                   
                   {/* Phone */}
                   <div style={{ 
-                    width: 150,
+                    width: 110,
                     fontFamily: 'Poppins',
                     fontWeight: 500,
                     fontSize: 14,
                     color: '#FFFFFF',
-                    marginRight: 30
+                    marginRight: 15
                   }}>Phone</div>
                   
                    {/* Age */}
                    <div style={{ 
-                     width: 80,
+                     width: 50,
                      fontFamily: 'Poppins',
                      fontWeight: 500,
                      fontSize: 14,
                      color: '#FFFFFF',
-                     textAlign: 'left',
-                     marginRight: 30,
-                     paddingLeft: 5
+                     textAlign: 'center',
+                     marginRight: 15
                    }}>Age</div>
                    
                    {/* Salary */}
                    <div style={{ 
-                     width: 100,
+                     width: 75,
                      fontFamily: 'Poppins',
                      fontWeight: 500,
                      fontSize: 14,
                      color: '#FFFFFF',
-                     textAlign: 'left',
-                     marginRight: 30,
-                     paddingLeft: 5
+                     textAlign: 'right',
+                     marginRight: 15
                    }}>Salary</div>
                    
                    {/* Timings */}
                    <div style={{ 
-                     width: 120,
+                     width: 85,
                      fontFamily: 'Poppins',
                      fontWeight: 500,
                      fontSize: 14,
                      color: '#FFFFFF',
-                     textAlign: 'left',
-                     marginRight: 30,
-                     paddingLeft: 5
+                     textAlign: 'center',
+                     marginRight: 15
                    }}>Timings</div>
                    
                    {/* Status */}

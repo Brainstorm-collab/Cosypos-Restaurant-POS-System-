@@ -10,6 +10,12 @@ router.get('/', requireAnyAuth(), async (req, res) => {
     
     const where = {};
     if (date) {
+      // Validate date input
+      const parsedDate = new Date(date);
+      if (isNaN(parsedDate.getTime())) {
+        return res.status(400).json({ error: 'Invalid date format. Please provide a valid date.' });
+      }
+      
       const startDate = new Date(date);
       startDate.setHours(0, 0, 0, 0);
       const endDate = new Date(date);
@@ -114,8 +120,10 @@ router.post('/', requireAnyAuth(), async (req, res) => {
 
     // Parse date or use current date
     const attendanceDate = date ? new Date(date) : new Date();
+    if (isNaN(attendanceDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid date format' });
+    }
     attendanceDate.setHours(0, 0, 0, 0);
-
     // Check if attendance record already exists for this user and date
     const existingAttendance = await prisma.attendance.findFirst({
       where: {
@@ -134,8 +142,8 @@ router.post('/', requireAnyAuth(), async (req, res) => {
         where: { id: existingAttendance.id },
         data: {
           status,
-          clockIn: clockIn ? new Date(clockIn) : undefined,
-          clockOut: clockOut ? new Date(clockOut) : undefined,
+          clockIn: clockIn !== undefined ? (clockIn ? new Date(clockIn) : null) : undefined,
+          clockOut: clockOut !== undefined ? (clockOut ? new Date(clockOut) : null) : undefined,
           breaksMin: breaksMin !== undefined ? parseInt(breaksMin) : undefined
         },
         include: {
@@ -194,17 +202,38 @@ router.put('/:id', requireAnyAuth(), async (req, res) => {
 
     const { id } = req.params;
     const { status, clockIn, clockOut, breaksMin } = req.body;
-
-    // Validate status if provided
-    if (status && !['PRESENT', 'ABSENT', 'HALF_SHIFT', 'LEAVE'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid status. Must be PRESENT, ABSENT, HALF_SHIFT, or LEAVE.' });
-    }
-
+    
     const updateData = {};
     if (status !== undefined) updateData.status = status;
-    if (clockIn !== undefined) updateData.clockIn = clockIn ? new Date(clockIn) : null;
-    if (clockOut !== undefined) updateData.clockOut = clockOut ? new Date(clockOut) : null;
-    if (breaksMin !== undefined) updateData.breaksMin = parseInt(breaksMin);
+    if (clockIn !== undefined) {
+      if (clockIn) {
+        const clockInDate = new Date(clockIn);
+        if (isNaN(clockInDate.getTime())) {
+          return res.status(400).json({ error: 'Invalid clockIn format' });
+        }
+        updateData.clockIn = clockInDate;
+      } else {
+        updateData.clockIn = null;
+      }
+    }
+    if (clockOut !== undefined) {
+      if (clockOut) {
+        const clockOutDate = new Date(clockOut);
+        if (isNaN(clockOutDate.getTime())) {
+          return res.status(400).json({ error: 'Invalid clockOut format' });
+        }
+        updateData.clockOut = clockOutDate;
+      } else {
+        updateData.clockOut = null;
+      }
+    }
+    if (breaksMin !== undefined) {
+      const parsed = parseInt(breaksMin);
+      if (isNaN(parsed) || parsed < 0) {
+        return res.status(400).json({ error: 'Invalid breaksMin value' });
+      }
+      updateData.breaksMin = parsed;
+    }
 
     const attendance = await prisma.attendance.update({
       where: { id },

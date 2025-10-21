@@ -23,12 +23,13 @@ export const usePerformance = () => {
   // Debounce function for performance
   const debounce = useCallback((func, delay) => {
     let timeoutId;
-    return (...args) => {
+    const debouncedFn = (...args) => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => func.apply(null, args), delay);
     };
+    debouncedFn.cancel = () => clearTimeout(timeoutId);
+    return debouncedFn;
   }, []);
-
   // Throttle function for performance
   const throttle = useCallback((func, delay) => {
     let lastCall = 0;

@@ -123,7 +123,7 @@ class DataSync {
       apiId: item.apiId || item.id,
       name: item.name || '',
       description: item.description || '',
-      image: item.image || null,
+      image: this.getStandardizedImage(item),
       stock: parseInt(item.stock) || 0,
       category: typeof item.category === 'string' ? item.category : item.category?.name || 'Other',
       price: this.getStandardizedPrice(item),

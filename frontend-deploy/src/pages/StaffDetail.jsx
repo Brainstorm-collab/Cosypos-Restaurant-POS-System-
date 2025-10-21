@@ -256,7 +256,7 @@ export default function StaffDetail() {
         </div>
         
         <main className="page-main-content" style={{ paddingTop: 20, paddingBottom: 32 }}>
-          <div className="grid-1-col-mobile-2-desktop" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+          <div className="grid-1-col-mobile-2-desktop" style={{ gap: 16 }}>
             
             {/* Left Column - Profile Image */}
             <div style={{ 

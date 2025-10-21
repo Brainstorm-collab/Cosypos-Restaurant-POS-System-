@@ -10,58 +10,71 @@ const colors = {
   muted: '#777979',
 }
 
-function NavCard({ to, label, icon: Icon, active }) {
+function NavCard({ to, label, icon: Icon, active, onClick }) {
+  const content = (
+    <div style={{ 
+      position: 'relative', 
+      width: 117, 
+      height: 84, 
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center'
+    }}>
+      {/* Pink background rectangle - only shows when selected */}
+      <div style={{ 
+        position: 'absolute', 
+        left: 0, 
+        right: 0, 
+        top: 0, 
+        bottom: 0, 
+        background: active ? colors.accent : 'transparent', 
+        borderRadius: 7.42918 
+      }} />
+      
+      {/* White circle with icon - always visible */}
+      <div style={{ 
+        width: 36, 
+        height: 36, 
+        background: '#FFFFFF', 
+        borderRadius: '50%', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        marginBottom: 8,
+        marginLeft: -3,
+        zIndex: 1
+      }}>
+        <Icon color={colors.accent} />
+      </div>
+      
+      {/* Text */}
+      <div style={{ 
+        fontFamily: 'Poppins', 
+        fontWeight: 400, 
+        fontSize: 16, 
+        lineHeight: '24px', 
+        textAlign: 'center', 
+        color: active ? '#333333' : '#FFFFFF',
+        zIndex: 1
+      }}>
+        {label}
+      </div>
+    </div>
+  )
+
+  // If onClick is provided, render as button, otherwise as Link
+  if (onClick) {
+    return (
+      <div onClick={onClick} style={{ textDecoration: 'none', display: 'flex', justifyContent: 'center', cursor: 'pointer' }}>
+        {content}
+      </div>
+    )
+  }
+
   return (
     <Link to={to} style={{ textDecoration: 'none', display: 'flex', justifyContent: 'center' }}>
-      <div style={{ 
-        position: 'relative', 
-        width: 117, 
-        height: 84, 
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        {/* Pink background rectangle - only shows when selected */}
-        <div style={{ 
-          position: 'absolute', 
-          left: 0, 
-          right: 0, 
-          top: 0, 
-          bottom: 0, 
-          background: active ? colors.accent : 'transparent', 
-          borderRadius: 7.42918 
-        }} />
-        
-        {/* White circle with icon - always visible */}
-        <div style={{ 
-          width: 36, 
-          height: 36, 
-          background: '#FFFFFF', 
-          borderRadius: '50%', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          marginBottom: 8,
-          marginLeft: -3,
-          zIndex: 1
-        }}>
-          <Icon color={colors.accent} />
-        </div>
-        
-        {/* Text */}
-        <div style={{ 
-          fontFamily: 'Poppins', 
-          fontWeight: 400, 
-          fontSize: 16, 
-          lineHeight: '24px', 
-          textAlign: 'center', 
-          color: active ? '#333333' : '#FFFFFF',
-          zIndex: 1
-        }}>
-          {label}
-        </div>
-      </div>
+      {content}
     </Link>
   )
 }
@@ -212,23 +225,12 @@ function ReservationIcon({ color = colors.accent }) {
   )
 }
 
-function ProfileIcon({ color = colors.accent }) {
+function LogoutIcon({ color = colors.accent }) {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* User profile icon */}
-      <circle cx="12" cy="8" r="4" fill={color} />
-      <path d="M6 21C6 17.5 8.5 15 12 15C15.5 15 18 17.5 18 21" fill={color} />
-    </svg>
-  )
-}
-
-function ManageAccessIcon({ color = colors.accent }) {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Shield with key icon for access management */}
-      <path d="M12 2L4 6V12C4 16.5 6.5 20.5 12 22C17.5 20.5 20 16.5 20 12V6L12 2Z" fill={color} opacity="0.9"/>
-      <path d="M9 12L11 14L15 10" stroke="#FFFFFF" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-      <circle cx="12" cy="8" r="2" fill="#FFFFFF"/>
+      <path d="M9 21H5C4.45 21 3.95 20.78 3.59 20.41C3.22 20.05 3 19.55 3 19V5C3 4.45 3.22 3.95 3.59 3.59C3.95 3.22 4.45 3 5 3H9" stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M16 17L21 12L16 7" stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M21 12H9" stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
@@ -246,43 +248,52 @@ export default function Sidebar() {
     setIsMobileMenuOpen(false)
   }, [location.pathname])
   
-  
   const onLogout = () => {
     localStorage.removeItem('token')
     navigate('/', { replace: true })
   }
 
-  // Define navigation items based on user permissions (memoized for performance)
+  // Define navigation items based on user role (memoized for performance)
   const navigationItems = useMemo(() => {
     if (!user) {
       return []
     }
 
-    // Parse permissions if they're a string
-    const permissions = typeof user.permissions === 'string' 
-      ? JSON.parse(user.permissions) 
-      : user.permissions || {}
-
-    // All possible items
-    const allPossibleItems = [
-      { to: '/dashboard', label: 'Dashboard', icon: DashboardGridIcon, permission: 'dashboard' },
-      { to: '/menu', label: 'Menu', icon: MenuIcon, permission: 'menu' },
-      { to: '/orders', label: 'Order/Table', icon: OrdersIcon, permission: 'orders' },
-      { to: '/reservation', label: 'Reservation', icon: ReservationIcon, permission: 'reservation' },
-      { to: '/staff', label: 'Staff', icon: StaffIcon, permission: 'staff' },
-      { to: '/inventory', label: 'Inventory', icon: InventoryIcon, permission: 'inventory' },
-      { to: '/reports', label: 'Reports', icon: ReportsIcon, permission: 'reports' },
+    // Base items - available to all authenticated users
+    const allItems = [
+      { to: '/dashboard', label: 'Dashboard', icon: DashboardGridIcon },
+      { to: '/menu', label: 'Menu', icon: MenuIcon },
+      { to: '/orders', label: 'Order/Table', icon: OrdersIcon },
+      { to: '/reservation', label: 'Reservation', icon: ReservationIcon },
     ]
 
-    // Filter items based on permissions
-    // ADMIN has access to everything
-    if (user.role === 'ADMIN') {
-      return allPossibleItems
+    // Staff-level items - available to STAFF and ADMIN
+    const staffItems = [
+      { to: '/staff', label: 'Staff', icon: StaffIcon },
+      { to: '/inventory', label: 'Inventory', icon: InventoryIcon },
+    ]
+
+    // Admin-only items
+    const adminItems = [
+      { to: '/reports', label: 'Reports', icon: ReportsIcon },
+    ]
+
+    let items = [...allItems]
+
+    // Add staff items for STAFF and ADMIN roles
+    if (user.role === 'STAFF' || user.role === 'ADMIN') {
+      items = [...items, ...staffItems]
     }
 
-    // For other users, filter by permissions
-    return allPossibleItems.filter(item => permissions[item.permission] === true)
-  }, [user?.role, user?.permissions])
+    // Add admin items for ADMIN role only
+    if (user.role === 'ADMIN') {
+      items = [...items, ...adminItems]
+    }
+    
+    console.log('🔐 Navigation loaded for role:', user.role, '- Items:', items.length)
+    
+    return items
+  }, [user?.role])
   
   return (
     <>
@@ -393,21 +404,31 @@ export default function Sidebar() {
       
       <nav style={{ display: 'grid', gap: 8 }}>
         {navigationItems.length > 0 ? (
-          navigationItems.map((item, index) => (
+          <>
+            {navigationItems.map((item, index) => (
+              <NavCard 
+                key={index}
+                to={item.to} 
+                label={item.label} 
+                icon={item.icon} 
+                active={
+                  item.to === '/staff' 
+                    ? location.pathname === '/staff' || location.pathname.startsWith('/staff/')
+                    : item.to === '/manage-access'
+                    ? location.pathname === '/manage-access' || location.pathname.startsWith('/manage-access/')
+                    : location.pathname === item.to
+                } 
+              />
+            ))}
+            
+            {/* Logout Button as NavCard */}
             <NavCard 
-              key={index}
-              to={item.to} 
-              label={item.label} 
-              icon={item.icon} 
-              active={
-                item.to === '/staff' 
-                  ? location.pathname === '/staff' || location.pathname.startsWith('/staff/')
-                  : item.to === '/manage-access'
-                  ? location.pathname === '/manage-access' || location.pathname.startsWith('/manage-access/')
-                  : location.pathname === item.to
-              } 
+              label="Logout"
+              icon={LogoutIcon}
+              onClick={() => setShowLogoutConfirm(true)}
+              active={false}
             />
-          ))
+          </>
         ) : (
           <div style={{ 
             color: colors.muted, 
@@ -419,31 +440,6 @@ export default function Sidebar() {
           </div>
         )}
       </nav>
-      
-      <div style={{ position: 'absolute', left: 24, right: 24, bottom: 24 }}>
-        <button onClick={() => setShowLogoutConfirm(true)} style={{ 
-          width: '100%', 
-          padding: '12px 16px', 
-          borderRadius: 8, 
-          background: 'transparent', 
-          border: 'none', 
-          color: colors.text, 
-          fontWeight: 400, 
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8
-        }}>
-          {/* Logout Icon */}
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M9 21H5C4.45 21 3.95 20.78 3.59 20.41C3.22 20.05 3 19.55 3 19V5C3 4.45 3.22 3.95 3.59 3.59C3.95 3.22 4.45 3 5 3H9" stroke={colors.accent} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M16 17L21 12L16 7" stroke={colors.accent} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M21 12H9" stroke={colors.accent} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          Logout
-        </button>
-      </div>
       
       {/* Logout Confirmation Dialog */}
       {showLogoutConfirm && (
