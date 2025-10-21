@@ -174,6 +174,11 @@ let inventoryItems = [
 // Get all inventory items - accessible by staff and admin
 router.get('/', requireAuth(['STAFF', 'ADMIN']), async (req, res) => {
   try {
+    // Disable caching to ensure real-time updates
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    
     res.json(inventoryItems);
   } catch (error) {
     console.error('Error fetching inventory items:', error);
@@ -190,6 +195,11 @@ router.get('/:id', requireAuth(['STAFF', 'ADMIN']), async (req, res) => {
     if (!item) {
       return res.status(404).json({ error: 'Inventory item not found' });
     }
+    
+    // Disable caching to ensure real-time updates
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     
     res.json(item);
   } catch (error) {
@@ -303,6 +313,11 @@ router.get('/alerts/low-stock', requireAuth(['STAFF', 'ADMIN']), async (req, res
       item.stock <= lowStockThreshold && item.stock > 0
     );
     
+    // Disable caching to ensure real-time updates
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    
     res.json(lowStockItems);
   } catch (error) {
     console.error('Error fetching low stock items:', error);
@@ -314,6 +329,11 @@ router.get('/alerts/low-stock', requireAuth(['STAFF', 'ADMIN']), async (req, res
 router.get('/alerts/out-of-stock', requireAuth(['STAFF', 'ADMIN']), async (req, res) => {
   try {
     const outOfStockItems = inventoryItems.filter(item => item.stock === 0);
+    
+    // Disable caching to ensure real-time updates
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     
     res.json(outOfStockItems);
   } catch (error) {

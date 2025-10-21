@@ -127,7 +127,7 @@ export default function Profile() {
         }}
       >
         <img 
-          src={user?.profileImage ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${user.profileImage}` : "/profile img icon.jpg"} 
+          src={user?.profileImage ? (import.meta.env.DEV ? user.profileImage : `${import.meta.env.VITE_API_URL}${user.profileImage}`) : "/profile img icon.jpg"} 
           alt="Profile" 
           style={{ 
             width: '100%',
@@ -152,16 +152,45 @@ export default function Profile() {
       fontFamily: 'Poppins, system-ui, sans-serif',
       overflow: 'hidden'
     }}>
+      <style>{`
+        .profile-container {
+          flex: 1;
+          margin-left: 0;
+          display: flex;
+          flex-direction: column;
+          min-height: 100vh;
+          overflow-x: hidden;
+        }
+        .profile-content {
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          flex: 1;
+          overflow-y: auto;
+          max-width: 100%;
+        }
+        @media (min-width: 768px) {
+          .profile-content {
+            padding: 20px 24px;
+            gap: 24px;
+          }
+        }
+        @media (min-width: 1024px) {
+          .profile-container {
+            margin-left: 176px;
+          }
+          .profile-content {
+            padding: 20px 40px;
+            flex-direction: row;
+            gap: 32px;
+            max-width: calc(100vw - 240px);
+          }
+        }
+      `}</style>
       <Sidebar />
       
-      <div style={{ 
-        flex: 1, 
-        marginLeft: 176,
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        overflow: 'hidden'
-      }}>
+      <div className="profile-container">
         <HeaderBar 
           title="Profile" 
           showBackButton={true}
@@ -169,25 +198,25 @@ export default function Profile() {
           right={rightContent}
         />
         
-        <div style={{ 
-          padding: '20px 40px',
-          display: 'flex',
-          gap: 32,
-          flex: 1,
-          overflow: 'hidden',
-          height: 'calc(100vh - 120px)',
-          maxWidth: 'calc(100vw - 240px)'
-        }}>
+        <div className="profile-content">
           {/* Profile Options Sidebar */}
           <div style={{
-            width: 220,
+            width: '100%',
+            maxWidth: 220,
             background: colors.panel,
             borderRadius: 12,
             padding: 20,
             height: 'fit-content',
-            flexShrink: 0,
-            marginLeft: 20
+            flexShrink: 0
           }}>
+            <style>{`
+              @media (min-width: 1024px) {
+                .profile-sidebar {
+                  margin-left: 20px;
+                }
+              }
+            `}</style>
+            <div className="profile-sidebar">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <button
                 onClick={() => setActiveSection('my-profile')}
@@ -262,6 +291,7 @@ export default function Profile() {
                 Logout
               </button>
             </div>
+          </div>
           </div>
           
           {/* Main Content */}

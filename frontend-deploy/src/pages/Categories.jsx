@@ -166,7 +166,9 @@ const CategoryButton = ({ category, isActive, onClick, user }) => {
       flexDirection: 'column',
       alignItems: 'center',
       width: '140px',
-      flex: '0 0 140px'
+      flex: '0 0 140px',
+      paddingTop: '4px',
+      paddingBottom: '4px'
     }}>
       <button
         onClick={() => onClick(category.id)}
@@ -234,25 +236,25 @@ const CategoryButton = ({ category, isActive, onClick, user }) => {
         
         {/* Category Image */}
         <div style={{ 
-          width: '32px',
-          height: '32px',
+          width: '50px',
+          height: '50px',
           opacity: isActive ? 1 : 0.8,
           transition: 'all 0.2s ease',
-          marginTop: '8px',
-          borderRadius: '8px',
+          marginTop: '6px',
+          borderRadius: '10px',
           overflow: 'hidden',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'
         }}>
           <img 
-            src={getCategoryImage(category.name)} 
+            src={category.image || getCategoryImage(category.name)} 
             alt={category.name}
             style={{
               width: '100%',
               height: '100%',
               objectFit: 'cover',
-              borderRadius: '6px'
+              borderRadius: '8px'
             }}
             onError={(e) => {
               e.target.src = '/placeholder-food.jpg'
@@ -350,43 +352,38 @@ const Categories = ({
         marginBottom: 16,
         marginTop: 24,
         paddingBottom: 12,
-        borderBottom: `1px solid ${colors.line}`
+        borderBottom: `1px solid ${colors.line}`,
+        flexWrap: 'nowrap'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 12,
+          flexWrap: 'nowrap'
+        }}>
           <h2 style={{ 
             fontSize: 22, 
             fontWeight: 700, 
             color: colors.text,
             margin: 0,
-            letterSpacing: '-0.5px'
+            letterSpacing: '-0.5px',
+            whiteSpace: 'nowrap'
           }}>
             Categories
           </h2>
-          {user?.role === 'USER' && (
-            <span style={{ 
-              fontSize: 13, 
-              fontWeight: 500, 
-              color: colors.accent,
-              background: 'rgba(250, 193, 217, 0.1)',
-              padding: '4px 8px',
-              borderRadius: 6,
-              border: `1px solid ${colors.accent}`
-            }}>
-              Browse our menu
-            </span>
-          )}
           <div style={{
             fontSize: 12,
             color: colors.muted,
             background: 'rgba(255,255,255,0.05)',
             padding: '4px 8px',
-            borderRadius: 6
+            borderRadius: 6,
+            whiteSpace: 'nowrap'
           }}>
             {categories.length} categories
           </div>
         </div>
         {showAddButton && (user?.role === 'ADMIN' || user?.role === 'STAFF') && (
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: '20px' }}>
             <button 
               onClick={() => onEditCategory && onEditCategory('bulk')}
               style={{

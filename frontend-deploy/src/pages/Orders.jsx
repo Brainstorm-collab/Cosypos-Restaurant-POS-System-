@@ -4,10 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { useUser } from './UserContext';
 import { getOrders, createOrder, updateOrder, getMenuItems } from '../utils/api';
 import { useMenuItems, useDataSync } from '../hooks/useDataSync';
+import realtimeSync from '../utils/realtimeSync';
 import Sidebar from './Sidebar.jsx'
 import HeaderBar from './HeaderBar.jsx'
 import Payment from './Payment.jsx'
 import Categories from './Categories.jsx'
+import Toast from '../components/Toast.jsx'
 
 const colors = { 
   bg: '#111315', 
@@ -486,52 +488,24 @@ export default function Orders() {
     }, 3000);
   };
 
-  // Toast Notification Component
-  const Toast = ({ toast }) => {
-    if (!toast.show) return null;
-    
-    return (
-      <div style={{
-        position: 'fixed',
-        top: 20,
-        right: 20,
-        background: toast.type === 'success' ? colors.accent : '#F44336',
-        color: toast.type === 'success' ? '#333333' : '#FFFFFF',
-        padding: '12px 20px',
-        borderRadius: 8,
-        fontSize: 14,
-        fontWeight: 500,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-        zIndex: 10000,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        animation: 'slideInRight 0.3s ease-out'
-      }}>
-        <div style={{
-          width: 20,
-          height: 20,
-          borderRadius: '50%',
-          background: toast.type === 'success' ? '#4CAF50' : '#FFFFFF',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 12,
-          fontWeight: 'bold'
-        }}>
-          {toast.type === 'success' ? '✓' : '✕'}
-        </div>
-        {toast.message}
-      </div>
-    );
-  };
-
   // Search Bar Component was moved to module scope
   
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [menuItems, setMenuItems] = useState([]);
+
+  // Refetch function to get fresh data from database
+  const refetchOrders = async () => {
+    try {
+      console.log('🔄 Refetching orders from database...');
+      const ordersData = await getOrders();
+      setOrders(ordersData);
+      console.log('✅ Orders refetched successfully');
+    } catch (error) {
+      console.error('Error refetching orders:', error);
+    }
+  };
 
   // Fetch orders and menu items on component mount
   useEffect(() => {
@@ -553,26 +527,42 @@ export default function Orders() {
     };
 
     fetchData();
+    
+    // Initialize real-time synchronization
+    realtimeSync.initialize();
   }, []);
 
-  // Refresh menu items when component becomes visible (for real-time updates)
+  // Add real-time listeners for Orders page
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        const refreshMenuItems = async () => {
-          try {
-            const menuItemsData = await getMenuItems();
-            setMenuItems(menuItemsData);
-          } catch (error) {
-            console.error('Error refreshing menu items:', error);
-          }
-        };
-        refreshMenuItems();
+    // Listen for real-time refresh events
+    const handleRealtimeRefresh = async () => {
+      console.log('🔄 Orders page real-time refresh triggered');
+      try {
+        const ordersData = await getOrders();
+        setOrders(ordersData);
+        
+        const menuItemsData = await getMenuItems();
+        setMenuItems(menuItemsData);
+      } catch (error) {
+        console.error('Error refreshing orders data:', error);
       }
     };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Listen for menu items updates
+    const handleMenuItemsUpdate = (event) => {
+      const { type, data } = event.detail;
+      if (type === 'menuItems') {
+        setMenuItems(data);
+      }
+    };
+    
+    window.addEventListener('realtime-refresh', handleRealtimeRefresh);
+    window.addEventListener('cosypos-data-update', handleMenuItemsUpdate);
+    
+    return () => {
+      window.removeEventListener('realtime-refresh', handleRealtimeRefresh);
+      window.removeEventListener('cosypos-data-update', handleMenuItemsUpdate);
+    };
   }, []);
 
   const defaultCategories = [
@@ -697,6 +687,9 @@ export default function Orders() {
         ));
         setEditingOrder(null);
         showToast(`Order #${updatedOrder.orderNumber} has been updated!`, 'success');
+        
+        // Refetch to ensure data is in sync with database
+        await refetchOrders();
       } else {
         // Create new order
         const orderData = {
@@ -712,6 +705,9 @@ export default function Orders() {
         const newOrder = await createOrder(orderData);
         setOrders(prev => [newOrder, ...prev]);
         showToast(`Order #${newOrder.orderNumber} has been created and sent to kitchen!`, 'success');
+        
+        // Refetch to ensure data is in sync with database
+        await refetchOrders();
       }
       
       setOrderItems([]);
@@ -795,6 +791,9 @@ export default function Orders() {
         order.id === orderId ? updatedOrder : order
       ));
       showToast(`Order status updated to ${newStatus}`, 'success');
+      
+      // Refetch to ensure data is in sync with database
+      await refetchOrders();
     } catch (error) {
       console.error('Error updating order status:', error);
       showToast('Failed to update order status. Please try again.', 'error');
@@ -822,6 +821,9 @@ export default function Orders() {
           order.id === selectedOrderForPayment.id ? updatedOrder : order
         ));
         showToast('Payment successful! Order completed.', 'success');
+        
+        // Refetch to ensure data is in sync with database
+        await refetchOrders();
       } catch (error) {
         console.error('Error processing payment:', error);
         showToast('Failed to process payment. Please try again.', 'error');
@@ -856,7 +858,7 @@ export default function Orders() {
           }
         `}
       </style>
-      <div style={{ width: 1440, margin: '0 auto', position: 'relative' }}>
+      <div style={{ width: '100%', maxWidth: '100vw', margin: '0 auto', position: 'relative' }}>
         <Sidebar />
         <HeaderBar title="Orders" showBackButton={true} onBackClick={() => window.history.back()} right={(
           <>
@@ -968,7 +970,7 @@ export default function Orders() {
               }}
             >
               <img 
-                src={user?.profileImage ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${user.profileImage}` : "/profile img icon.jpg"} 
+                src={user?.profileImage ? (import.meta.env.DEV ? user.profileImage : `${import.meta.env.VITE_API_URL}${user.profileImage}`) : "/profile img icon.jpg"} 
                 alt="Profile" 
                 style={{ 
                   width: '100%',
@@ -1324,7 +1326,7 @@ export default function Orders() {
   // Create Order View Component
   const CreateOrderView = () => (
     <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text }}>
-      <div style={{ width: 1440, margin: '0 auto', position: 'relative' }}>
+      <div style={{ width: '100%', maxWidth: '100vw', margin: '0 auto', position: 'relative' }}>
         <Sidebar />
         <HeaderBar title="Add Order Page" showBackButton={true} onBackClick={handleBackToDashboard} right={(
           <>
@@ -1405,7 +1407,7 @@ export default function Orders() {
               }}
             >
               <img 
-                src={user?.profileImage ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${user.profileImage}` : "/profile img icon.jpg"} 
+                src={user?.profileImage ? (import.meta.env.DEV ? user.profileImage : `${import.meta.env.VITE_API_URL}${user.profileImage}`) : "/profile img icon.jpg"} 
                 alt="Profile" 
                 style={{ 
                   width: '100%',
@@ -1459,10 +1461,10 @@ export default function Orders() {
             }} />
 
             {/* Menu Items Grid */}
-            <div style={{
+            <div className="grid-4-cols" style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: 16
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: 12
             }}>
               {filteredMenuItems.map((item, index) => (
                 <MenuItem 
@@ -2074,7 +2076,12 @@ export default function Orders() {
   return (
     <>
       {currentView === 'dashboard' ? DashboardView() : CreateOrderView()}
-      <Toast toast={toast} />
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ show: false, message: '', type: 'success' })}
+      />
     </>
   );
 }

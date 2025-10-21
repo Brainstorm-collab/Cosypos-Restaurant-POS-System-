@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, ChevronDown, Users, Plus, ChevronRight, User, CreditCard } from 'lucide-react';
 import { useUser } from './UserContext';
 import { getReservationsByDateFloor, createReservation, updateReservation, deleteReservation, getAvailableTables } from '../utils/api';
+import realtimeSync from '../utils/realtimeSync';
 import Sidebar from './Sidebar.jsx'
 import HeaderBar from './HeaderBar.jsx'
 
@@ -66,6 +67,7 @@ export default function Reservation() {
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [confirmDialog, setConfirmDialog] = useState({ show: false, message: '', onConfirm: null, title: '' });
   
   // Modal form states
   const [formData, setFormData] = useState({
@@ -118,10 +120,41 @@ export default function Reservation() {
     }, 3000);
   };
 
+  // Confirmation dialog function
+  const showConfirmDialog = (title, message, onConfirm) => {
+    setConfirmDialog({ show: true, title, message, onConfirm });
+  };
+
+  const closeConfirmDialog = () => {
+    setConfirmDialog({ show: false, message: '', onConfirm: null, title: '' });
+  };
+
   // Fetch reservations when date or floor changes
   useEffect(() => {
     fetchReservations();
+    
+    // Initialize real-time synchronization
+    realtimeSync.initialize();
   }, [selectedDate, selectedFloor]);
+
+  // Add real-time listeners for Reservation page
+  useEffect(() => {
+    // Listen for real-time refresh events
+    const handleRealtimeRefresh = async () => {
+      console.log('🔄 Reservation page real-time refresh triggered');
+      try {
+        await fetchReservations();
+      } catch (error) {
+        console.error('Error refreshing reservation data:', error);
+      }
+    };
+    
+    window.addEventListener('realtime-refresh', handleRealtimeRefresh);
+    
+    return () => {
+      window.removeEventListener('realtime-refresh', handleRealtimeRefresh);
+    };
+  }, []);
 
 
   // Update form data when floor changes
@@ -129,10 +162,10 @@ export default function Reservation() {
     setFormData(prev => ({ ...prev, floor: selectedFloor }));
   }, [selectedFloor]);
 
-  // Force re-render when selectedReservation changes
+  // Initialize edit form data when modal first opens (not on every change)
   useEffect(() => {
-    if (selectedReservation && isReservationDetailsOpen) {
-      console.log('Selected reservation changed, updating edit form data:', selectedReservation);
+    if (isReservationDetailsOpen && selectedReservation && !isEditMode) {
+      console.log('Initializing edit form data:', selectedReservation);
       setEditFormData({
         tableNumber: selectedReservation.tableNumber,
         floor: selectedReservation.floor,
@@ -150,7 +183,7 @@ export default function Reservation() {
         specialRequests: selectedReservation.specialRequests || ''
       });
     }
-  }, [selectedReservation, isReservationDetailsOpen]);
+  }, [isReservationDetailsOpen, selectedReservation?.id]);
 
   // Fetch available tables when modal opens
   useEffect(() => {
@@ -353,6 +386,9 @@ export default function Reservation() {
         reservation.id === selectedReservation.id ? updatedReservation : reservation
       ));
       
+      // Refetch immediately to ensure data is in sync with database
+      await fetchReservations();
+      
       // Update the selected reservation for the modal
       setSelectedReservation(updatedReservation);
       
@@ -394,35 +430,39 @@ export default function Reservation() {
   };
 
   // Handle delete reservation
-  const handleDeleteReservation = async () => {
-    if (window.confirm('Are you sure you want to delete this reservation?')) {
-      try {
-        setLoading(true);
-        console.log('Deleting reservation:', selectedReservation.id);
-        
-        // Delete via API
-        const result = await deleteReservation(selectedReservation.id);
-        console.log('Delete result:', result);
-        
-        // Update local state immediately
-        setReservations(prev => prev.filter(reservation => reservation.id !== selectedReservation.id));
-        
-        showToast('Reservation deleted successfully!', 'success');
-        setIsReservationDetailsOpen(false);
-        setIsEditMode(false);
-        
-        // Refresh data from backend in background
-        setTimeout(() => {
-          fetchReservations();
-        }, 500);
-        
-      } catch (error) {
-        console.error('Error deleting reservation:', error);
-        showToast(error.message || 'Failed to delete reservation', 'error');
-      } finally {
-        setLoading(false);
+  const handleDeleteReservation = () => {
+    showConfirmDialog(
+      'Delete Reservation',
+      'Are you sure you want to delete this reservation? This action cannot be undone.',
+      async () => {
+        try {
+          setLoading(true);
+          console.log('Deleting reservation:', selectedReservation.id);
+          
+          // Delete via API
+          const result = await deleteReservation(selectedReservation.id);
+          console.log('Delete result:', result);
+          
+          // Update local state immediately
+          setReservations(prev => prev.filter(reservation => reservation.id !== selectedReservation.id));
+          
+          showToast('Reservation deleted successfully!', 'success');
+          setIsReservationDetailsOpen(false);
+          setIsEditMode(false);
+          closeConfirmDialog();
+          
+          // Refetch immediately to ensure data is in sync with database
+          await fetchReservations();
+          
+        } catch (error) {
+          console.error('Error deleting reservation:', error);
+          showToast(error.message || 'Failed to delete reservation', 'error');
+          closeConfirmDialog();
+        } finally {
+          setLoading(false);
+        }
       }
-    }
+    );
   };
 
   // Check if user can edit/delete reservation
@@ -436,35 +476,77 @@ export default function Reservation() {
     return false;
   };
 
+  // Get background color based on reservation status
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'CONFIRMED':
+        return {
+          background: colors.accent, // Pink
+          color: '#000000',
+          border: 'none'
+        };
+      case 'PENDING':
+        return {
+          background: '#FFA500', // Orange
+          color: '#000000',
+          border: 'none'
+        };
+      case 'COMPLETED':
+        return {
+          background: '#4CAF50', // Green
+          color: '#FFFFFF',
+          border: 'none'
+        };
+      case 'CANCELLED':
+        return {
+          background: '#FF6B6B', // Red
+          color: '#FFFFFF',
+          border: 'none'
+        };
+      default:
+        return {
+          background: colors.panel,
+          color: colors.text,
+          border: `1px solid ${colors.gridLine}`
+        };
+    }
+  };
+
   const getReservationStyle = (reservation) => {
     const startIndex = timeSlots.indexOf(reservation.startTime);
     const endIndex = timeSlots.indexOf(reservation.endTime);
     const duration = endIndex - startIndex;
     
-    const leftOffset = reservation.status === 'CONFIRMED' ? -2 : -5;
+    // Account for table label width (80px) + grid cell offset
+    const tableLabelWidth = 80;
+    const leftOffset = 4; // Small gap from grid line
+    
+    const statusColors = getStatusColor(reservation.status);
     
     return {
       position: 'absolute',
-      left: `${startIndex * 100 + leftOffset}px`,
+      left: `${tableLabelWidth + (startIndex * 100) + leftOffset}px`,
       top: '8px',
-      width: `${duration * 100 - 2}px`,
+      width: `${duration * 100 - 8}px`,
       height: '44px',
-      background: reservation.status === 'CONFIRMED' ? colors.accent : colors.panel,
+      background: statusColors.background,
       borderRadius: '4px',
-      padding: '4px 6px',
+      padding: '6px 8px',
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'center',
-      color: colors.text,
+      color: statusColors.color,
       fontSize: '10px',
       fontWeight: '500',
       zIndex: 2,
-      border: reservation.status === 'CONFIRMED' ? 'none' : `1px solid ${colors.gridLine}`,
+      border: statusColors.border,
       cursor: 'pointer',
-      transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+      transition: 'transform 0.1s ease, box-shadow 0.1s ease',
       boxSizing: 'border-box',
       overflow: 'hidden',
-      pointerEvents: 'auto'
+      pointerEvents: 'auto',
+      maxWidth: `${duration * 100 - 8}px`,
+      minWidth: 0
     };
   };
 
@@ -473,7 +555,8 @@ export default function Reservation() {
     alignItems: 'center',
     height: '60px',
     borderBottom: `1px solid ${colors.gridLine}`,
-    position: 'relative'
+    position: 'relative',
+    overflow: 'hidden'
   });
 
   const getTableLabelStyle = () => ({
@@ -524,7 +607,8 @@ export default function Reservation() {
         `}
       </style>
       <div style={{ 
-        width: 1440, 
+        width: '100%', 
+        maxWidth: '100vw',
         margin: '0 auto', 
         position: 'relative',
         userSelect: 'none',
@@ -602,7 +686,7 @@ export default function Reservation() {
               }}
             >
               <img 
-                src={user?.profileImage ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${user.profileImage}` : "/profile img icon.jpg"} 
+                src={user?.profileImage ? (import.meta.env.DEV ? user.profileImage : `${import.meta.env.VITE_API_URL}${user.profileImage}`) : "/profile img icon.jpg"} 
                 alt="Profile" 
                 style={{ 
                   width: '100%',
@@ -753,18 +837,32 @@ export default function Reservation() {
                       style={getReservationStyle(reservation)}
                       onClick={() => handleReservationClick(reservation)}
                       onMouseEnter={(e) => {
-                        e.target.style.transform = 'scale(1.02)';
-                        e.target.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                        e.currentTarget.style.boxShadow = '0 3px 10px rgba(0, 0, 0, 0.3)';
+                        e.currentTarget.style.zIndex = '3';
                       }}
                       onMouseLeave={(e) => {
-                        e.target.style.transform = 'scale(1)';
-                        e.target.style.boxShadow = 'none';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.zIndex = '2';
                       }}
                     >
-                      <div style={{ fontWeight: '600', marginBottom: '2px' }}>
+                      <div style={{ 
+                        fontWeight: '600', 
+                        marginBottom: '2px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        width: '100%'
+                      }}>
                         {reservation.customer?.name || 'Unknown'}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '4px',
+                        flexShrink: 0
+                      }}>
                         <Users size={12} />
                         <span>{reservation.paxNumber.toString().padStart(2, '0')}</span>
                       </div>
@@ -1049,7 +1147,11 @@ export default function Reservation() {
                           border: `1px solid ${colors.gridLine}`,
                           borderRadius: '6px',
                           color: colors.text,
-                          fontSize: '14px'
+                          fontSize: '14px',
+                          userSelect: 'text',
+                          WebkitUserSelect: 'text',
+                          MozUserSelect: 'text',
+                          msUserSelect: 'text'
                         }}
                       />
                     </div>
@@ -1210,7 +1312,11 @@ export default function Reservation() {
                           border: `1px solid ${colors.gridLine}`,
                           borderRadius: '6px',
                           color: colors.text,
-                          fontSize: '14px'
+                          fontSize: '14px',
+                          userSelect: 'text',
+                          WebkitUserSelect: 'text',
+                          MozUserSelect: 'text',
+                          msUserSelect: 'text'
                         }}
                       />
                     </div>
@@ -1231,7 +1337,11 @@ export default function Reservation() {
                           border: `1px solid ${colors.gridLine}`,
                           borderRadius: '6px',
                           color: colors.text,
-                          fontSize: '14px'
+                          fontSize: '14px',
+                          userSelect: 'text',
+                          WebkitUserSelect: 'text',
+                          MozUserSelect: 'text',
+                          msUserSelect: 'text'
                         }}
                       />
                     </div>
@@ -1252,7 +1362,11 @@ export default function Reservation() {
                           border: `1px solid ${colors.gridLine}`,
                           borderRadius: '6px',
                           color: colors.text,
-                          fontSize: '14px'
+                          fontSize: '14px',
+                          userSelect: 'text',
+                          WebkitUserSelect: 'text',
+                          MozUserSelect: 'text',
+                          msUserSelect: 'text'
                         }}
                       />
                     </div>
@@ -1353,7 +1467,11 @@ export default function Reservation() {
                           borderRadius: '6px',
                           color: colors.text,
                           fontSize: '14px',
-                          resize: 'vertical'
+                          resize: 'vertical',
+                          userSelect: 'text',
+                          WebkitUserSelect: 'text',
+                          MozUserSelect: 'text',
+                          msUserSelect: 'text'
                         }}
                         placeholder="Any special requests or notes..."
                       />
@@ -1497,7 +1615,11 @@ export default function Reservation() {
                           border: `1px solid ${colors.gridLine}`,
                           borderRadius: '6px',
                           color: colors.text,
-                          fontSize: '14px'
+                          fontSize: '14px',
+                          userSelect: 'text',
+                          WebkitUserSelect: 'text',
+                          MozUserSelect: 'text',
+                          msUserSelect: 'text'
                         }}
                       />
                     </div>
@@ -1518,7 +1640,11 @@ export default function Reservation() {
                           border: `1px solid ${colors.gridLine}`,
                           borderRadius: '6px',
                           color: colors.text,
-                          fontSize: '14px'
+                          fontSize: '14px',
+                          userSelect: 'text',
+                          WebkitUserSelect: 'text',
+                          MozUserSelect: 'text',
+                          msUserSelect: 'text'
                         }}
                       />
                     </div>
@@ -1539,7 +1665,11 @@ export default function Reservation() {
                           border: `1px solid ${colors.gridLine}`,
                           borderRadius: '6px',
                           color: colors.text,
-                          fontSize: '14px'
+                          fontSize: '14px',
+                          userSelect: 'text',
+                          WebkitUserSelect: 'text',
+                          MozUserSelect: 'text',
+                          msUserSelect: 'text'
                         }}
                       />
                     </div>
@@ -1562,7 +1692,11 @@ export default function Reservation() {
                           border: `1px solid ${colors.gridLine}`,
                           borderRadius: '6px',
                           color: colors.text,
-                          fontSize: '14px'
+                          fontSize: '14px',
+                          userSelect: 'text',
+                          WebkitUserSelect: 'text',
+                          MozUserSelect: 'text',
+                          msUserSelect: 'text'
                         }}
                       />
                     </div>
@@ -1584,7 +1718,11 @@ export default function Reservation() {
                             border: `1px solid ${colors.gridLine}`,
                             borderRadius: '6px',
                             color: colors.text,
-                            fontSize: '14px'
+                            fontSize: '14px',
+                            userSelect: 'text',
+                            WebkitUserSelect: 'text',
+                            MozUserSelect: 'text',
+                            msUserSelect: 'text'
                           }}
                         />
                       </div>
@@ -1602,7 +1740,12 @@ export default function Reservation() {
                             border: `1px solid ${colors.gridLine}`,
                             borderRadius: '6px',
                             color: colors.text,
-                            fontSize: '14px'
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                            userSelect: 'text',
+                            WebkitUserSelect: 'text',
+                            MozUserSelect: 'text',
+                            msUserSelect: 'text'
                           }}
                         >
                           {timeSlots.map(time => (
@@ -1627,7 +1770,12 @@ export default function Reservation() {
                           border: `1px solid ${colors.gridLine}`,
                           borderRadius: '6px',
                           color: colors.text,
-                          fontSize: '14px'
+                          fontSize: '14px',
+                          cursor: 'pointer',
+                          userSelect: 'text',
+                          WebkitUserSelect: 'text',
+                          MozUserSelect: 'text',
+                          msUserSelect: 'text'
                         }}
                       >
                         <option value="PENDING">Pending</option>
@@ -1654,7 +1802,11 @@ export default function Reservation() {
                           borderRadius: '6px',
                           color: colors.text,
                           fontSize: '14px',
-                          resize: 'vertical'
+                          resize: 'vertical',
+                          userSelect: 'text',
+                          WebkitUserSelect: 'text',
+                          MozUserSelect: 'text',
+                          msUserSelect: 'text'
                         }}
                         placeholder="Any special requests or notes..."
                       />
@@ -1845,21 +1997,149 @@ export default function Reservation() {
         )}
 
         {/* Toast Notification */}
+        {/* Confirmation Dialog */}
+        {confirmDialog.show && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999
+          }}
+          onClick={closeConfirmDialog}
+          >
+            <div 
+              style={{
+                background: colors.panel,
+                borderRadius: '12px',
+                padding: '24px',
+                width: '400px',
+                maxWidth: '90%',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Dialog Header */}
+              <h3 style={{
+                margin: '0 0 16px 0',
+                fontSize: '18px',
+                fontWeight: '600',
+                color: colors.text
+              }}>
+                {confirmDialog.title}
+              </h3>
+
+              {/* Dialog Message */}
+              <p style={{
+                margin: '0 0 24px 0',
+                fontSize: '14px',
+                color: colors.muted,
+                lineHeight: '1.5'
+              }}>
+                {confirmDialog.message}
+              </p>
+
+              {/* Dialog Actions */}
+              <div style={{
+                display: 'flex',
+                gap: '12px',
+                justifyContent: 'flex-end'
+              }}>
+                <button
+                  onClick={closeConfirmDialog}
+                  style={{
+                    padding: '10px 20px',
+                    background: 'transparent',
+                    border: `1px solid ${colors.line}`,
+                    borderRadius: '8px',
+                    color: colors.text,
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = colors.line
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirmDialog.onConfirm) {
+                      confirmDialog.onConfirm();
+                    }
+                  }}
+                  style={{
+                    padding: '10px 20px',
+                    background: '#DC3545',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#FFFFFF',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: '0 2px 8px rgba(220, 53, 69, 0.4)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#C82333'
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 53, 69, 0.6)'
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#DC3545'
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 53, 69, 0.4)'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Toast Notification */}
         {toast.show && (
           <div style={{
             position: 'fixed',
             top: 20,
             right: 20,
-            background: toast.type === 'success' ? colors.accent : '#F44336',
-            color: toast.type === 'success' ? '#333333' : '#FFFFFF',
-            padding: '12px 20px',
+            background: toast.type === 'success' ? colors.accent : toast.type === 'error' ? '#FF6B6B' : '#FFA500',
+            color: toast.type === 'success' ? '#000000' : '#FFFFFF',
+            padding: '14px 20px',
             borderRadius: '8px',
             fontSize: '14px',
             fontWeight: '500',
             zIndex: 10000,
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            minWidth: '250px',
             animation: 'slideInRight 0.3s ease-out'
           }}>
-            {toast.message}
+            {/* Icon based on type */}
+            <div style={{ 
+              fontSize: '18px',
+              flexShrink: 0
+            }}>
+              {toast.type === 'success' && '✓'}
+              {toast.type === 'error' && '✕'}
+              {toast.type === 'info' && 'ℹ'}
+            </div>
+            <div style={{ flex: 1 }}>
+              {toast.message}
+            </div>
           </div>
         )}
       </div>

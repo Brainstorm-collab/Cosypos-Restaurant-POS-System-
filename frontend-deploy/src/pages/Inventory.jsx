@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { Bell } from 'lucide-react';
 import { FiEdit3, FiTrash2, FiPlus } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
@@ -6,9 +6,12 @@ import { useUser } from './UserContext';
 import Sidebar from './Sidebar.jsx';
 import HeaderBar from './HeaderBar.jsx';
 import InventoryQuickEdit from './InventoryQuickEdit.jsx';
+import Toast from '../components/Toast.jsx';
 import { useInventoryQuickEdit } from '../hooks/useInventoryQuickEdit.js';
 import { getMenuItems } from '../utils/api';
 import { useMenuItems, useDataSync } from '../hooks/useDataSync';
+import realtimeSync from '../utils/realtimeSync';
+import api from '../utils/apiClient';
 
 const colors = { 
   bg: '#111315', 
@@ -47,6 +50,7 @@ export default function Inventory() {
     image: null
   });
   const [imagePreview, setImagePreview] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Categories state - Load from localStorage or use default
   const [categories, setCategories] = useState(() => {
@@ -54,100 +58,97 @@ export default function Inventory() {
     return savedCategories ? JSON.parse(savedCategories) : ['Chicken', 'Pizza', 'Burger', 'Beverage'];
   });
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [confirmDialog, setConfirmDialog] = useState({ show: false, message: '', onConfirm: null, title: '' });
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Sample inventory data
-  const [inventoryItems, setInventoryItems] = useState([
-    {
-      id: 1,
-      name: 'Chicken Parmesan',
-      category: 'Chicken',
-      quantity: 10,
-      stock: 'InStock',
-      status: 'Active',
-      price: 55.00,
-      perishable: 'Yes',
-      image: '/chicken-parmesan.png'
-    },
-    {
-      id: 2,
-      name: 'Chicken Parmesan',
-      category: 'Chicken',
-      quantity: 10,
-      stock: 'InStock',
-      status: 'Active',
-      price: 55.00,
-      perishable: 'Yes',
-      image: '/chicken-parmesan.png'
-    },
-    {
-      id: 3,
-      name: 'Chicken Parmesan',
-      category: 'Chicken',
-      quantity: 10,
-      stock: 'InStock',
-      status: 'Active',
-      price: 55.00,
-      perishable: 'Yes',
-      image: '/chicken-parmesan.png'
-    },
-    {
-      id: 4,
-      name: 'Chicken Parmesan',
-      category: 'Chicken',
-      quantity: 10,
-      stock: 'InStock',
-      status: 'Active',
-      price: 55.00,
-      perishable: 'Yes',
-      image: '/chicken-parmesan.png'
-    },
-    {
-      id: 5,
-      name: 'Chicken Parmesan',
-      category: 'Chicken',
-      quantity: 10,
-      stock: 'InStock',
-      status: 'Active',
-      price: 55.00,
-      perishable: 'Yes',
-      image: '/chicken-parmesan.png'
-    },
-    {
-      id: 6,
-      name: 'Chicken Parmesan',
-      category: 'Chicken',
-      quantity: 10,
-      stock: 'InStock',
-      status: 'Active',
-      price: 55.00,
-      perishable: 'Yes',
-      image: '/chicken-parmesan.png'
-    },
-    {
-      id: 7,
-      name: 'Chicken Parmesan',
-      category: 'Chicken',
-      quantity: 10,
-      stock: 'InStock',
-      status: 'Active',
-      price: 55.00,
-      perishable: 'Yes',
-      image: '/chicken-parmesan.png'
-    }
-  ]);
+  // Inventory items from database
+  const [inventoryItems, setInventoryItems] = useState([]);
+
+  // Toast helper - defined early
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast({ show: false, message: '', type: 'success' });
+    }, 3000);
+  };
 
   // Load menu items on component mount
   useEffect(() => {
+    let mounted = true;
+    let timeoutId;
+
     const loadMenuItems = async () => {
       try {
+        setIsLoading(true);
+        console.log('📥 Loading inventory items...');
+        
+        // Safety timeout - force exit loading after 45 seconds
+        timeoutId = setTimeout(() => {
+          if (mounted) {
+            console.warn('⚠️ Loading timeout - displaying empty list');
+            setIsLoading(false);
+            showToast('Loading took too long. Please refresh the page.', 'warning');
+          }
+        }, 45000);
+        
         const items = await getMenuItems();
-        setInventoryItems(items);
+        
+        if (mounted) {
+          setInventoryItems(items);
+          console.log(`✅ Loaded ${items.length} items`);
+          setIsLoading(false);
+          clearTimeout(timeoutId);
+        }
       } catch (error) {
-        console.error('Error loading menu items:', error);
+        console.error('❌ Error loading menu items:', error);
+        if (mounted) {
+          showToast('Failed to load inventory items', 'error');
+          setIsLoading(false);
+          clearTimeout(timeoutId);
+        }
       }
     };
     
     loadMenuItems();
+    
+    // Initialize real-time synchronization
+    realtimeSync.initialize();
+
+    return () => {
+      mounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, []);
+
+  // Add real-time listeners for Inventory page
+  useEffect(() => {
+    // Listen for real-time refresh events
+    const handleRealtimeRefresh = async () => {
+      console.log('🔄 Inventory page real-time refresh triggered');
+      try {
+        const items = await getMenuItems();
+        setInventoryItems(items);
+      } catch (error) {
+        console.error('Error refreshing inventory data:', error);
+      }
+    };
+    
+    // Listen for menu items updates
+    const handleMenuItemsUpdate = (event) => {
+      const { type, data } = event.detail;
+      if (type === 'menuItems') {
+        setInventoryItems(data);
+      }
+    };
+    
+    window.addEventListener('realtime-refresh', handleRealtimeRefresh);
+    window.addEventListener('cosypos-data-update', handleMenuItemsUpdate);
+    
+    return () => {
+      window.removeEventListener('realtime-refresh', handleRealtimeRefresh);
+      window.removeEventListener('cosypos-data-update', handleMenuItemsUpdate);
+    };
   }, []);
 
   // Debouncing effect for search
@@ -221,6 +222,15 @@ export default function Inventory() {
     setIsAddModalOpen(true);
   };
 
+  // Dialog helper
+  const showConfirmDialog = (title, message, onConfirm) => {
+    setConfirmDialog({ show: true, title, message, onConfirm });
+  };
+
+  const closeConfirmDialog = () => {
+    setConfirmDialog({ show: false, message: '', onConfirm: null, title: '' });
+  };
+
   const handleEditItem = (item) => {
     // For staff users, open the quick edit modal
     if (user?.role === 'STAFF') {
@@ -229,38 +239,90 @@ export default function Inventory() {
       // For admin users, use the full edit modal
       setEditingItem(item);
       setImagePreview(item.image);
+      
+      // Extract category name if it's an object
+      const categoryName = typeof item.category === 'object' ? item.category.name : item.category;
+      
+      // Extract price value (remove $ and convert to number)
+      const priceValue = typeof item.price === 'string' 
+        ? item.price.replace(/[\$,]/g, '') 
+        : (item.priceCents ? item.priceCents / 100 : item.price);
+      
       setFormData({
         name: item.name,
-        category: item.category,
-        quantity: item.quantity,
+        category: categoryName,
+        quantity: item.stock || item.quantity || 0,
         stock: item.stock,
-        status: item.status,
-        price: item.price.toString(),
-        perishable: item.perishable,
-        image: item.image
+        status: item.availability === 'In Stock' ? 'Active' : item.status || 'Inactive',
+        price: priceValue.toString(),
+        perishable: item.perishable || 'No',
+        image: item.image,
+        description: item.description || ''
       });
       setIsEditModalOpen(true);
     }
   };
 
-  const handleDeleteItem = (itemId) => {
-    if (window.confirm('Are you sure you want to delete this inventory item?')) {
-      setInventoryItems(prev => prev.filter(item => item.id !== itemId));
+  const handleDeleteItem = async (itemId) => {
+    // Only admins can delete
+    if (user?.role !== 'ADMIN') {
+      showToast('Only administrators can delete inventory items', 'error');
+      return;
     }
+
+    showConfirmDialog(
+      'Delete Inventory Item',
+      'Are you sure you want to delete this inventory item? This action cannot be undone.',
+      async () => {
+        try {
+          await api.delete(`/api/menu-items/${itemId}`);
+          setInventoryItems(prev => prev.filter(item => item.id !== itemId));
+          showToast('Inventory item deleted successfully!', 'success');
+          closeConfirmDialog();
+          // Trigger real-time sync
+          realtimeSync.notifyChange('menu-items');
+        } catch (error) {
+          console.error('Error deleting item:', error);
+          showToast(error.message || 'Failed to delete inventory item', 'error');
+          closeConfirmDialog();
+        }
+      }
+    );
   };
 
   // Category management handlers
   const handleAddCategory = () => {
+    // Only admins can add categories
+    if (user?.role !== 'ADMIN') {
+      showToast('Only administrators can add categories', 'error');
+      return;
+    }
     setIsAddCategoryModalOpen(true);
   };
 
-  const handleSaveCategory = () => {
-    if (newCategoryName.trim()) {
+  const handleSaveCategory = async () => {
+    if (!newCategoryName.trim()) {
+      showToast('Please enter a category name', 'warning');
+      return;
+    }
+
+    // Only admins can save categories
+    if (user?.role !== 'ADMIN') {
+      showToast('Only administrators can add categories', 'error');
+      return;
+    }
+
+    try {
+      const categoryData = await api.post('/api/categories', { name: newCategoryName.trim() });
       const updatedCategories = [...categories, newCategoryName.trim()];
       setCategories(updatedCategories);
       localStorage.setItem('inventoryCategories', JSON.stringify(updatedCategories));
       setNewCategoryName('');
       setIsAddCategoryModalOpen(false);
+      showToast('Category added successfully!', 'success');
+    } catch (error) {
+      console.error('Error adding category:', error);
+      showToast(error.message || 'Failed to add category', 'error');
     }
   };
 
@@ -283,45 +345,81 @@ export default function Inventory() {
   };
 
 
-  const handleSaveItem = () => {
-    if (!formData.name || !formData.price) {
-      alert('Please fill in all required fields');
+  const handleSaveItem = async () => {
+    // Prevent multiple submissions
+    if (isSaving) {
+      console.log('⏸️ Save already in progress, ignoring...');
       return;
     }
 
-    if (isEditModalOpen && editingItem) {
-      // Update existing item
-      setInventoryItems(prev => prev.map(item => 
-        item.id === editingItem.id 
-          ? {
-              ...item,
-              name: formData.name,
-              category: formData.category,
-              quantity: parseInt(formData.quantity),
-              stock: formData.stock,
-              status: formData.status,
-              price: parseFloat(formData.price),
-              perishable: formData.perishable
-            }
-          : item
-      ));
-    } else {
-      // Add new item
-      const newItem = {
-        id: Date.now(),
-        name: formData.name,
-        category: formData.category,
-        quantity: parseInt(formData.quantity),
-        stock: formData.stock,
-        status: formData.status,
-        price: parseFloat(formData.price),
-        perishable: formData.perishable,
-        image: formData.image || '/chicken-parmesan.png'
-      };
-      setInventoryItems(prev => [newItem, ...prev]);
+    // Only admins can add/edit inventory items
+    if (user?.role !== 'ADMIN') {
+      showToast('Only administrators can modify inventory items', 'error');
+      return;
     }
-    
-    handleCloseModals();
+
+    if (!formData.name || !formData.price) {
+      showToast('Please fill in all required fields', 'warning');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      // Ensure category is a string, not an object
+      const categoryName = typeof formData.category === 'object' 
+        ? formData.category.name 
+        : formData.category;
+
+      const itemData = {
+        name: formData.name,
+        description: formData.description || '',
+        price: parseFloat(formData.price),
+        category: categoryName, // Always send as string
+        stock: parseInt(formData.quantity) || 0,
+        availability: formData.status === 'Active' ? 'In Stock' : 'Out of Stock',
+        image: formData.image || null
+      };
+
+      console.log('💾 Saving item with data:', itemData);
+
+      if (isEditModalOpen && editingItem) {
+        // Update existing item
+        const updatedItem = await api.put(`/api/menu-items/${editingItem.id}`, itemData);
+        setInventoryItems(prev => prev.map(item => 
+          item.id === editingItem.id ? updatedItem : item
+        ));
+        showToast('Inventory item updated successfully!', 'success');
+      } else {
+        // Add new item
+        const newItem = await api.post('/api/menu-items', itemData);
+        
+        // Only add if it doesn't already exist
+        setInventoryItems(prev => {
+          const exists = prev.some(item => item.id === newItem.id);
+          if (exists) {
+            console.log('⚠️ Item already exists, skipping add');
+            return prev;
+          }
+          console.log('✅ Adding new item to list');
+          return [newItem, ...prev];
+        });
+        
+        showToast('Inventory item created successfully!', 'success');
+      }
+      
+      handleCloseModals();
+      setIsSaving(false);
+      
+      // Trigger real-time sync after a delay
+      setTimeout(() => {
+        realtimeSync.notifyChange('menu-items');
+      }, 1000);
+    } catch (error) {
+      console.error('❌ Error saving item:', error);
+      showToast(error.message || 'Failed to save inventory item', 'error');
+      setIsSaving(false);
+    }
   };
 
   const handleFormChange = (field, value) => {
@@ -367,8 +465,8 @@ export default function Inventory() {
     }
   };
 
-  // Add New Inventory Modal
-  const AddInventoryModal = () => (
+  // Add New Inventory Modal - Render directly to avoid recreation
+  const renderAddInventoryModal = () => (
     <div 
       style={{
         position: 'fixed',
@@ -767,29 +865,31 @@ export default function Inventory() {
           </button>
           <button
             onClick={handleSaveItem}
+            disabled={isSaving}
             style={{
-              background: colors.accent,
+              background: isSaving ? colors.muted : colors.accent,
               border: 'none',
-              color: '#333333',
+              color: isSaving ? '#555' : '#333333',
               padding: '12px 24px',
               borderRadius: 6,
               fontSize: 14,
               fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
+              cursor: isSaving ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease',
+              opacity: isSaving ? 0.6 : 1
             }}
-            onMouseEnter={(e) => e.target.style.background = '#E8A8C8'}
-            onMouseLeave={(e) => e.target.style.background = colors.accent}
+            onMouseEnter={(e) => !isSaving && (e.target.style.background = '#E8A8C8')}
+            onMouseLeave={(e) => !isSaving && (e.target.style.background = colors.accent)}
           >
-            Save
+            {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
       </div>
     </div>
   );
 
-  // Edit Inventory Modal
-  const EditInventoryModal = () => (
+  // Edit Inventory Modal - Render directly to avoid recreation
+  const renderEditInventoryModal = () => (
     <div 
       style={{
         position: 'fixed',
@@ -1188,26 +1288,68 @@ export default function Inventory() {
           </button>
           <button
             onClick={handleSaveItem}
+            disabled={isSaving}
             style={{
-              background: colors.accent,
+              background: isSaving ? colors.muted : colors.accent,
               border: 'none',
-              color: '#333333',
+              color: isSaving ? '#555' : '#333333',
               padding: '12px 24px',
               borderRadius: 6,
               fontSize: 14,
               fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
+              cursor: isSaving ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease',
+              opacity: isSaving ? 0.6 : 1
             }}
-            onMouseEnter={(e) => e.target.style.background = '#E8A8C8'}
-            onMouseLeave={(e) => e.target.style.background = colors.accent}
+            onMouseEnter={(e) => !isSaving && (e.target.style.background = '#E8A8C8')}
+            onMouseLeave={(e) => !isSaving && (e.target.style.background = colors.accent)}
           >
-            Save
+            {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
       </div>
     </div>
   );
+
+  // Show loading screen while data is loading
+  if (isLoading) {
+    return (
+      <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text }}>
+        <div style={{ width: '100%', maxWidth: '100vw', margin: '0 auto', position: 'relative' }}>
+          <Sidebar />
+          <HeaderBar title="Inventory" showBackButton={true} />
+          <main style={{ paddingLeft: 208, paddingRight: 32, paddingTop: 20 }}>
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column',
+              alignItems: 'center', 
+              justifyContent: 'center',
+              height: '60vh',
+              gap: 20
+            }}>
+              <div style={{
+                width: 60,
+                height: 60,
+                border: `4px solid ${colors.muted}`,
+                borderTop: `4px solid ${colors.accent}`,
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }} />
+              <div style={{ color: colors.text, fontSize: 18, fontWeight: 500 }}>
+                Loading inventory...
+              </div>
+              <style>{`
+                @keyframes spin {
+                  0% { transform: rotate(0deg); }
+                  100% { transform: rotate(360deg); }
+                }
+              `}</style>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text }}>
@@ -1291,7 +1433,7 @@ export default function Inventory() {
               }}
             >
               <img 
-                src={user?.profileImage ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${user.profileImage}` : "/profile img icon.jpg"} 
+                src={user?.profileImage ? (import.meta.env.DEV ? user.profileImage : `${import.meta.env.VITE_API_URL}${user.profileImage}`) : "/profile img icon.jpg"} 
                 alt="Profile" 
                 style={{ 
                   width: '100%',
@@ -1308,8 +1450,7 @@ export default function Inventory() {
           </>
         )} />
 
-        <main style={{ 
-          marginLeft: 208, 
+        <main className="page-main-content" style={{ 
           padding: '20px 24px',
           display: 'flex',
           gap: 24
@@ -1777,8 +1918,8 @@ export default function Inventory() {
       </div>
 
       {/* Modals */}
-      {isAddModalOpen && <AddInventoryModal />}
-      {isEditModalOpen && <EditInventoryModal />}
+      {isAddModalOpen && renderAddInventoryModal()}
+      {isEditModalOpen && renderEditInventoryModal()}
       
       {/* Quick Edit Modal for Staff */}
       <InventoryQuickEdit 
@@ -1932,6 +2073,122 @@ export default function Inventory() {
           </div>
         </div>
       )}
+
+      {/* Confirmation Dialog */}
+      {confirmDialog.show && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}
+        onClick={closeConfirmDialog}
+        >
+          <div 
+            style={{
+              background: colors.panel,
+              borderRadius: '12px',
+              padding: '24px',
+              width: '400px',
+              maxWidth: '90%',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{
+              margin: '0 0 16px 0',
+              fontSize: '18px',
+              fontWeight: '600',
+              color: colors.text
+            }}>
+              {confirmDialog.title}
+            </h3>
+
+            <p style={{
+              margin: '0 0 24px 0',
+              fontSize: '14px',
+              color: colors.muted,
+              lineHeight: '1.5'
+            }}>
+              {confirmDialog.message}
+            </p>
+
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={closeConfirmDialog}
+                style={{
+                  padding: '10px 20px',
+                  background: 'transparent',
+                  border: `1px solid ${colors.line}`,
+                  borderRadius: '8px',
+                  color: colors.text,
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = colors.line
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (confirmDialog.onConfirm) {
+                    confirmDialog.onConfirm()
+                  }
+                }}
+                style={{
+                  padding: '10px 20px',
+                  background: '#DC3545',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#FFFFFF',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(220, 53, 69, 0.4)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#C82333'
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 53, 69, 0.6)'
+                  e.currentTarget.style.transform = 'translateY(-1px)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#DC3545'
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 53, 69, 0.4)'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ show: false, message: '', type: 'success' })}
+      />
     </div>
   );
 }

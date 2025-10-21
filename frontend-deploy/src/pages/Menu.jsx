@@ -1,45 +1,12 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell } from 'lucide-react'
-import { FiEdit3, FiTrash2, FiPlus } from 'react-icons/fi'
+import { FiEdit3, FiTrash2, FiPlus, FiX } from 'react-icons/fi'
 import { useUser } from './UserContext'
 import { getMenuItems, updateMenuItem, createMenuItem, deleteMenuItem, getCategories, createCategory, updateCategory, deleteCategory, uploadCategoryImage, uploadMenuItemImage } from '../utils/api'
-import Sidebar from './Sidebar.jsx'
-import HeaderBar from './HeaderBar.jsx'
+import Layout from './Layout.jsx'
 import Categories from './Categories.jsx'
-import { onInventoryUpdate } from '../utils/inventorySync'
-import dataSync from '../utils/dataSync'
-import { PizzaIcon, BurgerIcon, ChickenIcon, BakeryIcon, BeverageIcon, SeafoodIcon, getCategoryIcon, getCategoryImage } from './Categories.jsx'
-
-// Helper function to construct proper image URLs
-const getImageUrl = (imagePath) => {
-  if (!imagePath) return '/placeholder-food.jpg'
-  
-  // If it's already a full URL, return as is
-  if (imagePath.startsWith('http')) return imagePath
-  
-  // If it's a relative path starting with /uploads, construct full URL
-  if (imagePath.startsWith('/uploads/')) {
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000'
-    return `${baseUrl}${imagePath}`
-  }
-  
-  // If it's a relative path not starting with /uploads, assume it's in public folder
-  if (imagePath.startsWith('/')) return imagePath
-  
-  // For other cases, return as is (might be a data URL or other format)
-  return imagePath
-}
-
-// Static icons array for cycling - defined outside component to prevent recreation
-const AVAILABLE_ICONS = [
-  { name: 'PizzaIcon', component: PizzaIcon },
-  { name: 'BurgerIcon', component: BurgerIcon },
-  { name: 'ChickenIcon', component: ChickenIcon },
-  { name: 'BakeryIcon', component: BakeryIcon },
-  { name: 'BeverageIcon', component: BeverageIcon },
-  { name: 'SeafoodIcon', component: SeafoodIcon }
-];
+import Toast from '../components/Toast.jsx'
 
 const colors = {
   bg: '#111315',
@@ -51,324 +18,70 @@ const colors = {
   inputBg: '#3D4142',
 }
 
+// Helper functions
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return '/placeholder-food.jpg'
+    if (imagePath.startsWith('http')) return imagePath
+    if (imagePath.startsWith('/uploads/')) {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+      return `${baseUrl}${imagePath}`
+    }
+    if (imagePath.startsWith('/')) return imagePath
+    return imagePath
+  }
+
+const handleImageError = (e) => {
+  if (!e.target.src.includes('placeholder-food.jpg')) {
+    e.target.src = '/placeholder-food.jpg'
+  }
+}
 
 export default function Menu() {
   const navigate = useNavigate()
-  const { user, loading } = useUser()
-  const [isNotificationOpen, setIsNotificationOpen] = useState(false)
+  const { user } = useUser()
+  
+  // Check if user has menu editing permission
+  const canEditMenu = () => {
+    if (!user) return false
+    
+    // USER role (customers) should never have edit access
+    if (user.role === 'USER') return false
+    
+    // ADMIN and STAFF have full edit access
+    if (user.role === 'ADMIN') return true
+    if (user.role === 'STAFF') return true
+    
+    // For other roles, check permissions
+    try {
+      const permissions = typeof user.permissions === 'string' 
+        ? JSON.parse(user.permissions) 
+        : user.permissions || {}
+      return permissions.menu === true
+    } catch {
+      return false
+    }
+  }
+  
+  // Core data state
+  const [menuItems, setMenuItems] = useState([])
+  const [categories, setCategories] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [dataVersion, setDataVersion] = useState(0)
+  
+  // UI state
   const [activeCategory, setActiveCategory] = useState('all')
-  const [activeMenuType, setActiveMenuType] = useState('Normal Menu')
-  const [selectedItems, setSelectedItems] = useState([])
-  const [filteredMenuItems, setFilteredMenuItems] = useState([])
-  const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false)
-  const [isEditIconModalOpen, setIsEditIconModalOpen] = useState(false)
+  
+  // Modal states
   const [isAddMenuItemModalOpen, setIsAddMenuItemModalOpen] = useState(false)
   const [isEditMenuItemModalOpen, setIsEditMenuItemModalOpen] = useState(false)
-  const [editingCategory, setEditingCategory] = useState(null)
-  const [editingItem, setEditingItem] = useState(null)
-  const [editFormData, setEditFormData] = useState({})
-  const [menuItemsData, setMenuItemsData] = useState([])
-  const [editImageFile, setEditImageFile] = useState(null)
-  const [editImagePreview, setEditImagePreview] = useState(null)
-  
-  // Category management states
-  const [categoriesData, setCategoriesData] = useState([])
+  const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false)
   const [isEditCategoryModalOpen, setIsEditCategoryModalOpen] = useState(false)
-  const [editingCategoryData, setEditingCategoryData] = useState(null)
-  const [categoryImageFile, setCategoryImageFile] = useState(null)
-  const [categoryImagePreview, setCategoryImagePreview] = useState(null)
-  const [newCategoryForm, setNewCategoryForm] = useState({
-    name: '',
-    image: null
-  })
-  const [editCategoryForm, setEditCategoryForm] = useState({
-    name: '',
-    image: null
-  })
-
-  const [addCategoryForm, setAddCategoryForm] = useState({
-    name: '',
-    description: '',
-    menu: 'Normal Menu'
-  })
+  const [isManageCategoriesModalOpen, setIsManageCategoriesModalOpen] = useState(false)
   
-  // Edit Icon Modal state
-  const [editIconForm, setEditIconForm] = useState({
-    name: '',
-    menu: 'Normal Menu',
-    description: '',
-    icon: null,
-    iconIndex: 0
-  })
-  
-  // Add Menu Item image state
-  const [addImageFile, setAddImageFile] = useState(null)
-  const [addImagePreview, setAddImagePreview] = useState(null)
-
-  // Initialize menu items data
-  const fetchMenuItems = async () => {
-    try {
-      console.log('Fetching menu items from API...');
-      const items = await getMenuItems();
-      console.log('API returned items:', items);
-      
-      if (items && items.length > 0) {
-        // Transform API data using centralized data sync
-        const transformedItems = items.map(item => dataSync.standardizeMenuItem({
-          ...item,
-          apiId: item.id
-        }));
-        
-        console.log('Transformed items:', transformedItems);
-        setMenuItemsData(transformedItems);
-        
-        // Update centralized data sync
-        dataSync.broadcastUpdate('menuItems', transformedItems);
-      } else {
-        console.log('No items returned from API, using fallback data');
-        console.log('Fallback menu items:', menuItems);
-        const standardizedFallback = menuItems.map(item => dataSync.standardizeMenuItem(item));
-        setMenuItemsData(standardizedFallback);
-        
-        // Update centralized data sync
-        dataSync.broadcastUpdate('menuItems', standardizedFallback);
-      }
-    } catch (error) {
-      console.error('Error fetching menu items:', error);
-      console.log('Using fallback local data');
-      console.log('Fallback menu items:', menuItems);
-      // Fallback to local data if API fails
-      const standardizedFallback = menuItems.map(item => dataSync.standardizeMenuItem(item));
-      setMenuItemsData(standardizedFallback);
-      
-      // Update centralized data sync
-      dataSync.broadcastUpdate('menuItems', standardizedFallback);
-    }
-  };
-
-  // Calculate real counts for categories based on menu items
-  const calculateCategoryCounts = (categories, menuItems) => {
-    return categories.map(category => {
-      if (category.id === 'all') {
-        // For "All" category, show total count of all menu items
-        return {
-          ...category,
-          count: menuItems.length
-        };
-      } else {
-        // For specific categories, count items in that category
-        const count = menuItems.filter(item => {
-          const itemCategory = typeof item.category === 'string' ? item.category : item.category?.name;
-          return itemCategory?.toLowerCase() === category.name.toLowerCase();
-        }).length;
-        return {
-          ...category,
-          count: count
-        };
-      }
-    });
-  };
-
-  // Fetch categories from API
-  const fetchCategories = async () => {
-    try {
-      const categories = await getCategories();
-      // Transform API data to match expected format
-      const transformedCategories = categories.map(category => ({
-        id: category.id,
-        name: category.name,
-        image: category.image,
-        icon: getCategoryIcon(category.name),
-        count: category.items ? category.items.length : 0,
-        active: true
-      }));
-      
-      // Always include "All Items" category at the beginning
-      const allItemsCategory = {
-        id: 'all',
-        name: 'All Items',
-        image: getCategoryImage('All Items'),
-        icon: getCategoryIcon('All Items'),
-        count: 0,
-        active: true
-      };
-      
-      const categoriesWithAll = [allItemsCategory, ...transformedCategories];
-      
-      // Update with real counts from menu items using centralized data sync
-      const categoriesWithRealCounts = dataSync.calculateCategoryCounts(categoriesWithAll, menuItemsData);
-      setCategoriesData(categoriesWithRealCounts);
-      
-      // Update centralized data sync
-      dataSync.broadcastUpdate('categories', categoriesWithRealCounts);
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-      // Fallback to default categories
-      const defaultCategories = [
-        { id: 'all', name: 'All Items', image: getCategoryImage('All Items'), icon: getCategoryIcon('All Items'), count: 0, active: true },
-        { id: '1', name: 'Pizza', image: getCategoryImage('Pizza'), icon: getCategoryIcon('Pizza'), count: 0, active: true },
-        { id: '2', name: 'Burger', image: getCategoryImage('Burger'), icon: getCategoryIcon('Burger'), count: 0, active: true },
-        { id: '3', name: 'Chicken', image: getCategoryImage('Chicken'), icon: getCategoryIcon('Chicken'), count: 0, active: true },
-        { id: '4', name: 'Beverage', image: getCategoryImage('Beverage'), icon: getCategoryIcon('Beverage'), count: 0, active: true },
-        { id: '5', name: 'Seafood', image: getCategoryImage('Seafood'), icon: getCategoryIcon('Seafood'), count: 0, active: true },
-        { id: '6', name: 'Bakery', image: getCategoryImage('Bakery'), icon: getCategoryIcon('Bakery'), count: 0, active: true }
-      ];
-      
-      // Update with real counts from menu items using centralized data sync
-      const categoriesWithRealCounts = dataSync.calculateCategoryCounts(defaultCategories, menuItemsData);
-      setCategoriesData(categoriesWithRealCounts);
-      
-      // Update centralized data sync
-      dataSync.broadcastUpdate('categories', categoriesWithRealCounts);
-    }
-  };
-    
-  useEffect(() => {
-    fetchMenuItems();
-    fetchCategories();
-    
-    // Subscribe to real-time data updates
-    const unsubscribeMenuItems = dataSync.subscribe('menuItems', (updatedItems) => {
-      setMenuItemsData(updatedItems);
-    });
-    
-    const unsubscribeCategories = dataSync.subscribe('categories', (updatedCategories) => {
-      setCategoriesData(updatedCategories);
-    });
-    
-    // Listen for global data updates
-    const handleGlobalUpdate = (event) => {
-      const { type, data } = event.detail;
-      if (type === 'menuItems') {
-        setMenuItemsData(data);
-      } else if (type === 'categories') {
-        setCategoriesData(data);
-      }
-    };
-    
-    window.addEventListener('cosypos-data-update', handleGlobalUpdate);
-    
-    return () => {
-      unsubscribeMenuItems();
-      unsubscribeCategories();
-      window.removeEventListener('cosypos-data-update', handleGlobalUpdate);
-    };
-  }, []);
-
-  // Update category counts when menu items change
-  useEffect(() => {
-    if (menuItemsData.length > 0 && categoriesData.length > 0) {
-      const updatedCategories = calculateCategoryCounts(categoriesData, menuItemsData);
-      setCategoriesData(updatedCategories);
-    }
-  }, [menuItemsData]);
-
-  // Refresh menu items when component becomes visible (for real-time updates)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        fetchMenuItems();
-        fetchCategories();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
-
-  // Real-time updates - refresh data every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchMenuItems();
-      fetchCategories();
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Initialize categories data
-  useEffect(() => {
-    const savedCategories = localStorage.getItem('inventoryCategories');
-    if (savedCategories) {
-      const inventoryCategories = JSON.parse(savedCategories);
-      const defaultCategories = [
-        { id: 'all', name: 'All Items', icon: getCategoryIcon('All Items'), count: 0, active: true },
-        ...inventoryCategories.map(category => ({
-          id: category.toLowerCase(),
-          name: category,
-          icon: getCategoryIcon(category),
-          count: 0
-        }))
-      ];
-      
-      // Update with real counts from menu items
-      const categoriesWithRealCounts = calculateCategoryCounts(defaultCategories, menuItemsData);
-      setCategoriesData(categoriesWithRealCounts);
-    } else {
-      // Use default categories with correct counts
-      const defaultCategories = [
-        { id: 'all', name: 'All Items', image: getCategoryImage('All Items'), icon: getCategoryIcon('All Items'), count: 0, active: true },
-        { id: 'pizza', name: 'Pizza', image: getCategoryImage('Pizza'), icon: getCategoryIcon('Pizza'), count: 0 },
-        { id: 'burger', name: 'Burger', image: getCategoryImage('Burger'), icon: getCategoryIcon('Burger'), count: 0 },
-        { id: 'chicken', name: 'Chicken', image: getCategoryImage('Chicken'), icon: getCategoryIcon('Chicken'), count: 0 },
-        { id: 'beverage', name: 'Beverage', image: getCategoryImage('Beverage'), icon: getCategoryIcon('Beverage'), count: 0 },
-        { id: 'seafood', name: 'Seafood', image: getCategoryImage('Seafood'), icon: getCategoryIcon('Seafood'), count: 0 },
-        { id: 'bakery', name: 'Bakery', image: getCategoryImage('Bakery'), icon: getCategoryIcon('Bakery'), count: 0 },
-      ];
-      
-      // Update with real counts from menu items
-      const categoriesWithRealCounts = calculateCategoryCounts(defaultCategories, menuItemsData);
-      setCategoriesData(categoriesWithRealCounts);
-    }
-  }, []);
-
-  // Filter menu items based on active category
-  useEffect(() => {
-    if (menuItemsData.length > 0) {
-      if (activeCategory === 'all') {
-        setFilteredMenuItems(menuItemsData);
-      } else {
-        // Find the category name from categoriesData
-        const selectedCategory = categoriesData.find(cat => cat.id === activeCategory);
-        if (selectedCategory) {
-          const filtered = menuItemsData.filter(item => {
-            const itemCategory = typeof item.category === 'string' ? item.category : item.category?.name;
-            return itemCategory?.toLowerCase() === selectedCategory.name.toLowerCase();
-          });
-          setFilteredMenuItems(filtered);
-        } else {
-          setFilteredMenuItems(menuItemsData);
-        }
-      }
-    }
-  }, [menuItemsData, activeCategory, categoriesData]);
-
-  // Listen for changes in localStorage to update categories in real-time
-  useEffect(() => {
-    const handleStorageChange = () => {
-      const savedCategories = localStorage.getItem('inventoryCategories');
-      if (savedCategories) {
-        const inventoryCategories = JSON.parse(savedCategories);
-        const defaultCategories = [
-          { id: 'all', name: 'All Items', icon: getCategoryIcon('All Items'), count: 0, active: true },
-          ...inventoryCategories.map(category => ({
-            id: category.toLowerCase(),
-            name: category,
-            icon: getCategoryIcon(category),
-            count: 0
-          }))
-        ];
-        
-        // Update with real counts from menu items
-        const categoriesWithRealCounts = calculateCategoryCounts(defaultCategories, menuItemsData);
-        setCategoriesData(categoriesWithRealCounts);
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-  const [addMenuItemForm, setAddMenuItemForm] = useState({
+  // Form states
+  const [editingItem, setEditingItem] = useState(null)
+  const [editingCategory, setEditingCategory] = useState(null)
+  const [menuItemForm, setMenuItemForm] = useState({
     name: '',
     description: '',
     price: '',
@@ -376,802 +89,398 @@ export default function Menu() {
     stock: '',
     availability: 'In Stock'
   })
+  const [categoryForm, setCategoryForm] = useState({ name: '', image: null })
+  const [imageFile, setImageFile] = useState(null)
+  const [imagePreview, setImagePreview] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' })
+  const [confirmDialog, setConfirmDialog] = useState({ show: false, message: '', onConfirm: null, title: '' })
 
-  // Listen for inventory updates from other components
-  useEffect(() => {
-    const cleanup = onInventoryUpdate((updatedItem, allItems) => {
-      // Update the menu items data with the updated inventory item
-      setMenuItemsData(prev => prev.map(item => {
-        // Find matching item by name and category
-        if (item.name === updatedItem.name && item.category === updatedItem.category?.name) {
-          return {
-            ...item,
-            stock: updatedItem.stock,
-            availability: updatedItem.availability
-          };
-        }
-        return item;
-      }));
-    });
-    
-    return cleanup;
-  }, []);
-
-  // Clear text selection when clicking outside and auto-deselect categories
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (window.getSelection) {
-        window.getSelection().removeAllRanges()
-      }
+  // Fetch data from PostgreSQL
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true)
+      console.log('🔄 Fetching from PostgreSQL...')
       
-      // Auto-deselect category when clicking outside categories area
-      const categoriesContainer = event.target.closest('[data-categories-container]')
-      if (!categoriesContainer && activeCategory !== 'all') {
-        setActiveCategory('all')
-      }
+      const [itemsData, categoriesData] = await Promise.all([
+        getMenuItems(),
+        getCategories()
+      ])
+      
+      console.log('📊 Received:', itemsData.length, 'items,', categoriesData.length, 'categories')
+      
+      // Transform menu items from PostgreSQL
+      const transformedItems = itemsData.map(item => {
+        const availability = item.available === true ? 'In Stock' : 'Out of Stock'
+        console.log(`📦 Item: ${item.name}, available: ${item.available}, availability: ${availability}`)
+        
+        return {
+          id: item.id,
+          name: item.name,
+          description: item.description || '',
+          price: item.priceCents ? (item.priceCents / 100).toFixed(2) : '0.00',
+          category: item.category?.name || 'Other',
+          categoryId: item.categoryId,
+          stock: item.stock || 0,
+          availability: availability,
+          image: item.image || '/placeholder-food.jpg',
+          active: item.available
+        }
+      })
+      
+      // Add "All" category
+      const allCategories = [
+        {
+        id: 'all',
+        name: 'All Items',
+          count: transformedItems.length
+        },
+        ...categoriesData.map(cat => ({
+          ...cat,
+          count: transformedItems.filter(item => item.categoryId === cat.id).length
+        }))
+      ]
+      
+      setMenuItems(transformedItems)
+      setCategories(allCategories)
+      setDataVersion(prev => prev + 1)
+      
+      console.log('✅ Data loaded successfully')
+    } catch (error) {
+      console.error('❌ Error fetching data:', error)
+      showToast('Failed to load data: ' + error.message, 'error')
+    } finally {
+      setLoading(false)
     }
-
-    document.addEventListener('click', handleClickOutside)
-    return () => {
-      document.removeEventListener('click', handleClickOutside)
-    }
-  }, [activeCategory])
-
-  // Debug logging
-  console.log('Menu component - User:', user)
-  console.log('Menu component - User role:', user?.role)
-  console.log('Menu component - Loading:', loading)
-  
-  // Show loading state if user is still loading
-  if (loading) {
-    return (
-      <div style={{ 
-        minHeight: '100vh', 
-        background: colors.bg, 
-        color: colors.text,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <div style={{ fontSize: 18, fontWeight: 500 }}>Loading menu...</div>
-      </div>
-    )
-  }
-
-  // If not loading but no user, redirect to login
-  if (!user) {
-    navigate('/', { replace: true })
-    return null
-  }
-
-
-
-  // Menu types
-  const menuTypes = [
-    { id: 'normal', name: 'Normal Menu' },
-    { id: 'special', name: 'Special Deals' },
-    { id: 'newyear', name: 'New Year Special' },
-    { id: 'desserts', name: 'Deserts and Drinks' },
-  ]
-
-  // Menu items data (fallback)
-  const menuItems = [
-    // Pizza Items
-    {
-      id: '#1',
-      name: 'Margherita Pizza',
-      description: 'Classic pizza with tomato sauce, mozzarella, and fresh basil',
-      image: '/pizza.jpg',
-      stock: 50,
-      category: 'Pizza',
-      price: '$25.00',
-      availability: 'In Stock',
-      active: true
-    },
-    {
-      id: '#2',
-      name: 'Pepperoni Pizza',
-      description: 'Delicious pizza topped with spicy pepperoni and mozzarella',
-      image: '/pizza.jpg',
-      stock: 45,
-      category: 'Pizza',
-      price: '$28.00',
-      availability: 'In Stock',
-      active: true
-    },
-    {
-      id: '#3',
-      name: 'BBQ Chicken Pizza',
-      description: 'Grilled chicken with BBQ sauce, onions, and cheese',
-      image: '/pizza.jpg',
-      stock: 35,
-      category: 'Pizza',
-      price: '$32.00',
-      availability: 'In Stock',
-      active: true
-    },
-    {
-      id: '#4',
-      name: 'Veggie Supreme Pizza',
-      description: 'Loaded with bell peppers, mushrooms, onions, and olives',
-      image: '/pizza.jpg',
-      stock: 40,
-      category: 'Pizza',
-      price: '$26.00',
-      availability: 'In Stock',
-      active: true
-    },
+  }, [])
     
-    // Burger Items
-    {
-      id: '#5',
-      name: 'Classic Burger',
-      description: 'Juicy beef patty with lettuce, tomato, and special sauce',
-      image: '/burger.jpg',
-      stock: 75,
-      category: 'Burger',
-      price: '$18.00',
-      availability: 'In Stock',
-      active: true
-    },
-    {
-      id: '#6',
-      name: 'Chicken Burger',
-      description: 'Grilled chicken breast with lettuce, tomato, and mayo',
-      image: '/burger.jpg',
-      stock: 60,
-      category: 'Burger',
-      price: '$20.00',
-      availability: 'In Stock',
-      active: true
-    },
-    {
-      id: '#7',
-      name: 'Cheeseburger',
-      description: 'Beef patty with melted cheese, lettuce, and tomato',
-      image: '/burger.jpg',
-      stock: 55,
-      category: 'Burger',
-      price: '$21.00',
-      availability: 'In Stock',
-      active: true
-    },
-    {
-      id: '#8',
-      name: 'Bacon Burger',
-      description: 'Beef patty with crispy bacon and cheddar cheese',
-      image: '/burger.jpg',
-      stock: 45,
-      category: 'Burger',
-      price: '$24.00',
-      availability: 'In Stock',
-      active: true
-    },
-    
-    // Chicken Items
-    {
-      id: '#9',
-      name: 'Chicken Parmesan',
-      description: 'Breaded chicken breast with marinara sauce and mozzarella cheese',
-      image: '/chicken-parmesan.png',
-      stock: 65,
-      category: 'Chicken',
-      price: '$22.00',
-      availability: 'In Stock',
-      active: true
-    },
-    {
-      id: '#10',
-      name: 'Grilled Chicken',
-      description: 'Tender grilled chicken breast with herbs and spices',
-      image: '/grill chicken.jpg',
-      stock: 70,
-      category: 'Chicken',
-      price: '$19.00',
-      availability: 'In Stock',
-      active: true
-    },
-    
-    // Beverage Items
-    {
-      id: '#11',
-      name: 'Coca Cola',
-      description: 'Refreshing cola drink',
-      image: '/cococola.jpg',
-      stock: 100,
-      category: 'Beverage',
-      price: '$3.00',
-      availability: 'In Stock',
-      active: true
-    },
-    {
-      id: '#12',
-      name: 'Fresh Orange Juice',
-      description: 'Freshly squeezed orange juice',
-      image: '/orange juice.jpg',
-      stock: 80,
-      category: 'Beverage',
-      price: '$4.00',
-      availability: 'In Stock',
-      active: true
-    },
-    
-    // Seafood Items
-    {
-      id: '#13',
-      name: 'Grilled Salmon',
-      description: 'Fresh Atlantic salmon grilled to perfection',
-      image: '/salamon.jpg',
-      stock: 25,
-      category: 'Seafood',
-      price: '$35.00',
-      availability: 'In Stock',
-      active: true
-    },
-    
-    // Bakery Items
-    {
-      id: '#14',
-      name: 'Chocolate Cake',
-      description: 'Rich chocolate cake with chocolate frosting',
-      image: '/choclate cake.jpg',
-      stock: 30,
-      category: 'Bakery',
-      price: '$8.00',
-      availability: 'In Stock',
-      active: true
-    },
-    {
-      id: '#15',
-      name: 'Apple Pie',
-      description: 'Homemade apple pie with cinnamon and sugar',
-      image: '/apple pie.jpg',
-      stock: 35,
-      category: 'Bakery',
-      price: '$7.00',
-      availability: 'In Stock',
-      active: true
-    },
-  ]
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
-  const handleCategoryClick = (categoryId) => {
-    setActiveCategory(categoryId)
+  // Toast and Dialog helpers
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type })
+    setTimeout(() => {
+      setToast({ show: false, message: '', type: 'success' })
+    }, 3000)
   }
 
-  const handleMenuTypeClick = (menuTypeId) => {
-    setActiveMenuType(menuTypeId)
+  const showConfirmDialog = (title, message, onConfirm) => {
+    setConfirmDialog({ show: true, title, message, onConfirm })
   }
 
-  const handleItemSelect = (itemId) => {
-    setSelectedItems(prev => 
-      prev.includes(itemId) 
-        ? prev.filter(id => id !== itemId)
-        : [...prev, itemId]
-    )
+  const closeConfirmDialog = () => {
+    setConfirmDialog({ show: false, message: '', onConfirm: null, title: '' })
   }
 
-  const handleSelectAll = () => {
-    if (selectedItems.length === filteredMenuItems.length) {
-      setSelectedItems([])
-    } else {
-      setSelectedItems(filteredMenuItems.map(item => item.id))
-    }
+  // Menu Item CRUD
+  const handleAddMenuItem = () => {
+    setMenuItemForm({
+    name: '',
+    description: '',
+    price: '',
+      category: categories.length > 1 ? categories[1].id : '',
+      stock: '0',
+    availability: 'In Stock'
+  })
+    setImageFile(null)
+    setImagePreview(null)
+    setEditingItem(null)
+    setIsAddMenuItemModalOpen(true)
   }
 
-  const handleEditItem = (itemId) => {
-    const item = menuItemsData.find(item => item.id === itemId)
-    if (item) {
-      setEditingItem(itemId)
-      setEditFormData({
+  const handleEditMenuItem = (item) => {
+    setEditingItem(item)
+    setMenuItemForm({
         name: item.name,
         description: item.description,
-        price: item.price.replace('$', ''),
-        category: item.category,
-        stock: item.stock,
+      price: item.price,
+      category: item.categoryId || '',
+      stock: item.stock.toString(),
         availability: item.availability
       })
-      setEditImageFile(null)
-      setEditImagePreview(null)
+    setImageFile(null)
+    setImagePreview(getImageUrl(item.image))
       setIsEditMenuItemModalOpen(true)
+  }
+
+  const handleSaveMenuItem = async () => {
+    try {
+      setSaving(true)
+      console.log('💾 Saving to PostgreSQL...')
+      
+      if (!menuItemForm.name?.trim()) {
+        showToast('Please enter item name', 'error')
+        return
+      }
+      if (!menuItemForm.price || parseFloat(menuItemForm.price) < 0) {
+        showToast('Please enter valid price', 'error')
+        return
+      }
+      if (!menuItemForm.category) {
+        showToast('Please select a category', 'error')
+        return
+      }
+
+      let imageUrl = editingItem?.image || '/placeholder-food.jpg'
+      if (imageFile) {
+        console.log('📤 Uploading image...')
+        const uploadResult = await uploadMenuItemImage(imageFile)
+        imageUrl = uploadResult.imageUrl
+        console.log('✅ Image uploaded:', imageUrl)
+      }
+
+      // Find category name from ID
+      const selectedCategory = categories.find(cat => cat.id === menuItemForm.category)
+      const categoryName = selectedCategory ? selectedCategory.name : 'Other'
+
+      // Format data to match backend expectations
+      const itemData = {
+        name: menuItemForm.name.trim(),
+        description: menuItemForm.description?.trim() || '',
+        price: parseFloat(menuItemForm.price), // Backend converts this to priceCents
+        category: categoryName, // Backend expects category NAME, not ID
+        stock: parseInt(menuItemForm.stock) || 0,
+        availability: menuItemForm.availability, // Backend expects "In Stock" or "Out of Stock"
+            image: imageUrl
+          }
+          
+      console.log('💾 Saving item data:', itemData)
+      console.log('📊 Availability value:', menuItemForm.availability)
+
+      let savedItem
+      if (editingItem) {
+        console.log('🔄 Updating item ID:', editingItem.id)
+        savedItem = await updateMenuItem(editingItem.id, itemData)
+        console.log('✅ Updated in PostgreSQL. Response:', savedItem)
+      } else {
+        savedItem = await createMenuItem(itemData)
+        console.log('✅ Created in PostgreSQL. Response:', savedItem)
+      }
+
+      // Close modals first
+      showToast(editingItem ? 'Menu item updated successfully!' : 'Menu item created successfully!', 'success')
+      setIsAddMenuItemModalOpen(false)
+        setIsEditMenuItemModalOpen(false)
+      setEditingItem(null)
+      setImageFile(null)
+      setImagePreview(null)
+      
+      // Force refetch with a small delay to ensure database has updated
+      console.log('🔄 Refetching data from PostgreSQL...')
+      await new Promise(resolve => setTimeout(resolve, 200))
+      await fetchData()
+      console.log('✅ UI updated with latest data')
+        
+      } catch (error) {
+      console.error('❌ Save error:', error)
+      showToast('Failed to save: ' + error.message, 'error')
+    } finally {
+      setSaving(false)
     }
   }
 
-  const handleEditImageChange = (e) => {
+  const handleDeleteMenuItem = (itemId) => {
+    showConfirmDialog(
+      'Delete Menu Item',
+      'Are you sure you want to delete this menu item? This action cannot be undone.',
+      async () => {
+        try {
+          console.log('🗑️ Deleting from PostgreSQL...')
+        await deleteMenuItem(itemId)
+          console.log('✅ Deleted from PostgreSQL')
+          showToast('Menu item deleted successfully!', 'success')
+          closeConfirmDialog()
+          await fetchData()
+      } catch (error) {
+          console.error('❌ Delete error:', error)
+          showToast('Failed to delete: ' + error.message, 'error')
+          closeConfirmDialog()
+        }
+      }
+    )
+  }
+
+  // Category CRUD
+  const handleAddCategory = () => {
+    setCategoryForm({ name: '', image: null })
+    setImageFile(null)
+    setImagePreview(null)
+    setEditingCategory(null)
+    setIsAddCategoryModalOpen(true)
+  }
+
+  const handleEditCategory = (category) => {
+    if (category.id === 'all') return
+    setEditingCategory(category)
+    setCategoryForm({ name: category.name, image: category.image })
+    setImageFile(null)
+    setImagePreview(category.image ? getImageUrl(category.image) : null)
+    setIsEditCategoryModalOpen(true)
+  }
+
+  const handleSaveCategory = async () => {
+    try {
+      setSaving(true)
+      console.log('💾 Saving category to PostgreSQL...')
+      
+      if (!categoryForm.name?.trim()) {
+        showToast('Please enter category name', 'error')
+        return
+      }
+
+      let imageUrl = editingCategory?.image || null
+      if (imageFile) {
+        console.log('📤 Uploading category image...')
+        const uploadResult = await uploadCategoryImage(imageFile)
+        imageUrl = uploadResult.imageUrl
+        console.log('✅ Category image uploaded:', imageUrl)
+      }
+
+        const categoryData = {
+        name: categoryForm.name.trim(),
+          image: imageUrl
+      }
+
+      if (editingCategory) {
+        await updateCategory(editingCategory.id, categoryData)
+        console.log('✅ Category updated in PostgreSQL')
+    } else {
+        await createCategory(categoryData)
+        console.log('✅ Category created in PostgreSQL')
+      }
+
+      showToast(editingCategory ? 'Category updated successfully!' : 'Category created successfully!', 'success')
+      setIsAddCategoryModalOpen(false)
+      setIsEditCategoryModalOpen(false)
+      setEditingCategory(null)
+      
+      await fetchData()
+      
+          } catch (error) {
+      console.error('❌ Save category error:', error)
+      showToast('Failed to save category: ' + error.message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteCategory = (categoryId) => {
+    showConfirmDialog(
+      'Delete Category',
+      'Are you sure you want to delete this category?',
+      async () => {
+        try {
+          console.log('🗑️ Deleting category from PostgreSQL...')
+          await deleteCategory(categoryId, false)
+          console.log('✅ Category deleted from PostgreSQL')
+          
+          if (activeCategory === categoryId) {
+            setActiveCategory('all')
+          }
+          
+          showToast('Category deleted successfully!', 'success')
+          closeConfirmDialog()
+          await fetchData()
+        } catch (error) {
+          console.error('❌ Delete category error:', error)
+          
+          // Check if error has details (items blocking deletion)
+          if (error.details && error.details.items) {
+            closeConfirmDialog()
+            
+            // Show detailed error with items
+            const itemsList = error.details.items
+              .map(item => `• ${item.name} (${item.price})`)
+              .join('\n');
+            
+            const confirmMessage = `❌ Cannot delete "${error.details.categoryName}"
+            
+This category has ${error.details.itemCount} menu item${error.details.itemCount > 1 ? 's' : ''}:
+
+${itemsList}
+
+⚠️ Choose an option:
+
+1️⃣ Delete category AND all ${error.details.itemCount} item${error.details.itemCount > 1 ? 's' : ''} (CANNOT BE UNDONE)
+2️⃣ Cancel and keep category
+
+Do you want to DELETE EVERYTHING?`;
+            
+            showConfirmDialog(
+              '⚠️ Cascade Delete Warning',
+              confirmMessage,
+              async () => {
+                try {
+                  console.log(`🗑️ Force deleting category with ${error.details.itemCount} items...`)
+                  await deleteCategory(categoryId, true)
+                  console.log('✅ Category and items deleted from PostgreSQL')
+                  
+                  if (activeCategory === categoryId) {
+                    setActiveCategory('all')
+                  }
+                  
+                  showToast(`Category and ${error.details.itemCount} items deleted successfully!`, 'success')
+                  closeConfirmDialog()
+                  await fetchData()
+                } catch (forceError) {
+                  console.error('❌ Force delete error:', forceError)
+                  showToast('Failed to delete category: ' + forceError.message, 'error')
+                  closeConfirmDialog()
+                }
+              }
+            )
+          } else {
+            showToast('Failed to delete category: ' + error.message, 'error')
+            closeConfirmDialog()
+          }
+        }
+      }
+    )
+  }
+
+  const handleImageChange = (e) => {
     const file = e.target.files[0]
     if (file) {
-      setEditImageFile(file)
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setEditImagePreview(e.target.result)
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('Image size should be less than 5MB', 'error')
+        return
       }
+      setImageFile(file)
+      const reader = new FileReader()
+      reader.onloadend = () => setImagePreview(reader.result)
       reader.readAsDataURL(file)
     }
   }
 
-  const handleSaveEdit = async () => {
-    if (editingItem) {
-      try {
-        // Find the original item to get the API ID
-        const originalItem = menuItemsData.find(item => item.id === editingItem)
-        if (originalItem && originalItem.apiId) {
-          let imageUrl = originalItem.image // Keep existing image by default
-          
-          // Handle image upload if new image is selected
-          if (editImageFile) {
-            try {
-              // Upload image first using the proper API endpoint
-              const uploadResponse = await uploadMenuItemImage(editImageFile)
-              if (uploadResponse.success && uploadResponse.imageUrl) {
-                imageUrl = uploadResponse.imageUrl
-              }
-            } catch (error) {
-              console.error('Image upload failed:', error)
-              // Continue without image update if upload fails
-            }
-          }
-          
-          // Prepare update data with correct field names for backend
-          const updateData = {
-            name: editFormData.name,
-            description: editFormData.description,
-            price: editFormData.price, // Backend expects price as string, not priceCents
-            stock: parseInt(editFormData.stock),
-            availability: editFormData.availability,
-            category: editFormData.category,
-            image: imageUrl
-          }
-          
-          // Update menu item via API
-          const updatedItem = await updateMenuItem(originalItem.apiId, updateData)
-          
-          // Update local state with the response from backend
-          setMenuItemsData(prev => prev.map(item => 
-            item.id === editingItem 
-              ? {
-                  ...item,
-                  name: updatedItem.name,
-                  description: updatedItem.description,
-                  price: `$${(updatedItem.priceCents / 100).toFixed(2)}`,
-                  stock: updatedItem.stock,
-                  category: updatedItem.category?.name || editFormData.category,
-                  availability: updatedItem.availability,
-                  image: updatedItem.image || item.image
-                }
-              : item
-          ))
-          
-          // Update centralized data sync
-          dataSync.updateMenuItem(editingItem, {
-            ...originalItem,
-            name: updatedItem.name,
-            description: updatedItem.description,
-            price: `$${(updatedItem.priceCents / 100).toFixed(2)}`,
-            stock: updatedItem.stock,
-            category: updatedItem.category?.name || editFormData.category,
-            availability: updatedItem.availability,
-            image: updatedItem.image || item.image
-          })
-        }
-        
-        // Close modal and reset state
-        setEditingItem(null)
-        setEditFormData({})
-        setEditImageFile(null)
-        setEditImagePreview(null)
-        setIsEditMenuItemModalOpen(false)
-        
-        // Refresh menu items to ensure data consistency
-        await fetchMenuItems()
-        
-      } catch (error) {
-        console.error('Error updating menu item:', error)
-        alert('Failed to update menu item. Please try again.')
-        
-        // Reset modal state on error
-        setEditingItem(null)
-        setEditFormData({})
-        setEditImageFile(null)
-        setEditImagePreview(null)
-        setIsEditMenuItemModalOpen(false)
-      }
-    }
-  }
+  const filteredMenuItems = activeCategory === 'all' 
+    ? menuItems 
+    : menuItems.filter(item => item.categoryId === activeCategory)
 
-  const handleCancelEdit = () => {
-    setEditingItem(null)
-    setEditFormData({})
-    setEditImageFile(null)
-    setEditImagePreview(null)
-    setIsEditMenuItemModalOpen(false)
-  }
-
-  const handleDeleteItem = async (itemId) => {
-    if (window.confirm('Are you sure you want to delete this menu item?')) {
-      try {
-        // Find the original item to get the API ID
-        const originalItem = menuItemsData.find(item => item.id === itemId)
-        if (originalItem && originalItem.apiId) {
-          // Delete via API
-          await deleteMenuItem(originalItem.apiId)
-          
-          // Update local state
-          setMenuItemsData(prev => prev.filter(item => item.id !== itemId));
-          setSelectedItems(prev => prev.filter(id => id !== itemId));
-          
-          // Update centralized data sync
-          dataSync.removeMenuItem(itemId);
-          
-          // Refresh menu items from API to ensure data consistency
-          await fetchMenuItems()
-          
-          alert('Menu item deleted successfully!')
-        } else {
-          // Fallback: just remove from local state if no API ID
-          setMenuItemsData(prev => prev.filter(item => item.id !== itemId))
-          setSelectedItems(prev => prev.filter(id => id !== itemId))
-          dataSync.removeMenuItem(itemId)
-        }
-      } catch (error) {
-        console.error('Error deleting menu item:', error)
-        alert('Failed to delete menu item. Please try again.')
-      }
-    }
-  }
-
-  const handleAddCategory = () => {
-    setIsAddCategoryModalOpen(true)
-  }
-
-  const handleEditIcon = (category) => {
-    setEditingCategory(category)
-    
-    // Find the current icon index in the available icons array
-    let iconIndex = 0;
-    if (category.icon) {
-      const currentIconName = category.icon.type?.name;
-      iconIndex = AVAILABLE_ICONS.findIndex(icon => icon.name === currentIconName);
-      if (iconIndex === -1) iconIndex = 0;
-    }
-    
-    setEditIconForm({
-      name: category.name || '',
-      menu: 'Normal Menu',
-      description: category.description || '',
-      icon: category.icon || null,
-      iconIndex: iconIndex
-    })
-    setIsEditIconModalOpen(true)
-  }
-
-  const handleEditIconSave = async () => {
-    try {
-      if (!editIconForm.name.trim()) {
-        // Show user-friendly notification instead of alert
-        setIsNotificationOpen(true);
-        setTimeout(() => setIsNotificationOpen(false), 3000);
-        return;
-      }
-      
-      // Get the current icon component from the index
-      const currentIconData = AVAILABLE_ICONS[editIconForm.iconIndex];
-      const IconComponent = currentIconData.component;
-      
-      // Construct the updated category payload
-      const updatedCategoryData = {
-        name: editIconForm.name,
-        description: editIconForm.description,
-        icon: <IconComponent />
-      };
-      
-      // Call the update API
-      const updatedCategory = await updateCategory(editingCategory.id, updatedCategoryData);
-      
-      // Update categories data after successful API call
-      setCategoriesData(prev => 
-        prev.map(cat => cat.id === editingCategory.id ? updatedCategory : cat)
-      );
-      
-      handleCloseModals();
-    } catch (error) {
-      console.error('Error updating category:', error);
-      // Show user-friendly notification instead of alert
-      setIsNotificationOpen(true);
-      setTimeout(() => setIsNotificationOpen(false), 3000);
-    }
-  };
-
-  const handleCloseModals = () => {
-    setIsAddCategoryModalOpen(false)
-    setIsEditIconModalOpen(false)
-    setIsAddMenuItemModalOpen(false)
-    setIsEditMenuItemModalOpen(false)
-    setIsEditCategoryModalOpen(false)
-    setEditingCategory(null)
-    setEditingItem(null)
-    setEditingCategoryData(null)
-    setEditFormData({})
-    setAddCategoryForm({ name: '', description: '', menu: 'Normal Menu' })
-    setEditIconForm({ name: '', menu: 'Normal Menu', description: '', icon: null, iconIndex: 0 })
-    setAddMenuItemForm({ name: '', description: '', price: '', category: '', stock: '', availability: 'In Stock' })
-    setNewCategoryForm({ name: '', image: null })
-    setEditCategoryForm({ name: '', image: null })
-    setCategoryImageFile(null)
-    setCategoryImagePreview(null)
-    setAddImageFile(null)
-    setAddImagePreview(null)
-    setEditImageFile(null)
-    setEditImagePreview(null)
-  }
-
-  const handleAddCategorySubmit = async () => {
-    if (newCategoryForm.name.trim()) {
-      try {
-        let imageUrl = null;
-        
-        // Upload image if provided
-        if (categoryImageFile) {
-          try {
-            const uploadResult = await uploadCategoryImage(categoryImageFile);
-            imageUrl = uploadResult.imageUrl;
-          } catch (error) {
-            console.warn('Image upload failed, creating category without image:', error);
-          }
-        }
-        
-        // Create category via API
-        const categoryData = {
-          name: newCategoryForm.name,
-          image: imageUrl
-        };
-        
-        const newCategory = await createCategory(categoryData);
-        
-        // Add to categories data with proper formatting
-        const formattedCategory = {
-          id: newCategory.id,
-          name: newCategory.name,
-          image: newCategory.image || getCategoryImage(newCategory.name),
-          icon: getCategoryIcon(newCategory.name),
-          count: 0, // Will be updated by calculateCategoryCounts
-          active: true
-        };
-        
-        setCategoriesData(prev => {
-          const updated = [...prev, formattedCategory];
-          return calculateCategoryCounts(updated, menuItemsData);
-        });
-        
-        handleCloseModals();
-      } catch (error) {
-        console.error('Error creating category:', error);
-        alert('Failed to create category. Please try again.');
-      }
-    }
-  }
-
-  // New category management handlers
-  const handleEditCategory = (category) => {
-    if (category === 'bulk') {
-      // Handle bulk edit - show all categories for editing
-      setIsEditCategoryModalOpen(true);
-      setEditingCategoryData(null); // No specific category selected for bulk edit
-      setEditCategoryForm({ name: '', image: null });
-      setCategoryImagePreview(null);
-    } else {
-      // Handle individual category edit
-      setEditingCategoryData(category);
-      setEditCategoryForm({
-        name: category.name,
-        image: category.image
-      });
-      setCategoryImagePreview(category.image);
-      setIsEditCategoryModalOpen(true);
-    }
-  }
-
-  const handleCategoryImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setCategoryImageFile(file);
-      const reader = new FileReader();
-      reader.onload = (e) => setCategoryImagePreview(e.target.result);
-      reader.readAsDataURL(file);
-    }
-  }
-
-  const handleEditCategorySubmit = async () => {
-    if (editCategoryForm.name.trim()) {
-      try {
-        let imageUrl = editCategoryForm.image;
-        
-        // Upload new image if provided
-        if (categoryImageFile) {
-          try {
-            const uploadResult = await uploadCategoryImage(categoryImageFile);
-            imageUrl = uploadResult.imageUrl;
-          } catch (error) {
-            console.warn('Image upload failed, updating category without new image:', error);
-          }
-        }
-        
-        // Update category via API
-        const categoryData = {
-          name: editCategoryForm.name,
-          image: imageUrl
-        };
-        
-        const updatedCategory = await updateCategory(editingCategoryData.id, categoryData);
-        
-        // Update categories data with proper formatting
-        const formattedCategory = {
-          id: updatedCategory.id,
-          name: updatedCategory.name,
-          image: updatedCategory.image || getCategoryImage(updatedCategory.name),
-          icon: getCategoryIcon(updatedCategory.name),
-          count: 0, // Will be updated by calculateCategoryCounts
-          active: true
-        };
-        
-        setCategoriesData(prev => {
-          const updated = prev.map(cat => 
-            cat.id === editingCategoryData.id ? formattedCategory : cat
-          );
-          return calculateCategoryCounts(updated, menuItemsData);
-        });
-        
-        handleCloseModals();
-      } catch (error) {
-        console.error('Error updating category:', error);
-        alert('Failed to update category. Please try again.');
-      }
-    }
-  }
-
-  const handleDeleteCategory = async (categoryId) => {
-    if (window.confirm('Are you sure you want to delete this category? This will also remove all menu items in this category.')) {
-      try {
-        await deleteCategory(categoryId);
-        
-        // Remove category from categories data
-        setCategoriesData(prev => {
-          const updated = prev.filter(cat => cat.id !== categoryId);
-          return calculateCategoryCounts(updated, menuItemsData);
-        });
-        
-        // Remove menu items that belong to this category
-        const deletedCategory = categoriesData.find(cat => cat.id === categoryId);
-        if (deletedCategory) {
-          setMenuItemsData(prev => prev.filter(item => 
-            item.category?.toLowerCase() !== deletedCategory.name.toLowerCase()
-          ));
-        }
-        
-        // Reset active category if it was deleted
-        if (activeCategory === categoryId) {
-          setActiveCategory('all');
-        }
-      } catch (error) {
-        console.error('Error deleting category:', error);
-        alert('Failed to delete category. Please try again.');
-      }
-    }
-  }
-
-  const handleAddMenuItemSubmit = async () => {
-    if (addMenuItemForm.name.trim() && addMenuItemForm.price && addMenuItemForm.category) {
-      try {
-        let imageUrl = null
-        
-        // Handle image upload if image is selected
-        if (addImageFile) {
-          try {
-            const uploadResponse = await uploadMenuItemImage(addImageFile)
-            if (uploadResponse.success && uploadResponse.imageUrl) {
-              imageUrl = uploadResponse.imageUrl
-            }
-          } catch (error) {
-            console.error('Image upload failed:', error)
-            // Continue without image if upload fails
-          }
-        }
-        
-        const newMenuItemData = {
-          name: addMenuItemForm.name,
-          description: addMenuItemForm.description,
-          price: addMenuItemForm.price, // Backend expects price as string, not priceCents
-          stock: parseInt(addMenuItemForm.stock) || 0,
-          category: addMenuItemForm.category,
-          availability: addMenuItemForm.availability,
-          image: imageUrl
-        }
-        
-        // Create via API
-        const createdItem = await createMenuItem(newMenuItemData)
-        
-        // Add to local state using standardized format
-        const newMenuItem = dataSync.standardizeMenuItem({
-          ...createdItem,
-          apiId: createdItem.id,
-          category: createdItem.category?.name || addMenuItemForm.category
-        });
-        
-        setMenuItemsData(prev => [...prev, newMenuItem]);
-        
-        // Update centralized data sync
-        dataSync.addMenuItem(newMenuItem);
-        
-        // Reset form and close modal
-        setAddMenuItemForm({
-          name: '',
-          description: '',
-          price: '',
-          category: '',
-          stock: '',
-          availability: 'In Stock'
-        })
-        setAddImageFile(null)
-        setAddImagePreview(null)
-        handleCloseModals();
-        
-        // Refresh menu items to ensure data consistency
-        await fetchMenuItems()
-        
-      } catch (error) {
-        console.error('Error creating menu item:', error)
-        alert('Failed to create menu item. Please try again.')
-      }
-    }
-  }
-
-  const handleBackdropClick = (e) => {
-    if (e.target === e.currentTarget) {
-      handleCloseModals()
-    }
-  }
-
-  const handleAddMenuItem = () => {
-    setIsAddMenuItemModalOpen(true)
+  if (loading && menuItems.length === 0) {
+  return (
+      <Layout title="Menu">
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          height: 400,
+          color: colors.muted 
+        }}>
+          Loading menu...
+        </div>
+      </Layout>
+    )
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text }}>
-      <style>
-        {`
-          @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-          }
-          @keyframes slideIn {
-            from { 
-              opacity: 0; 
-              transform: scale(0.9) translateY(-20px); 
-            }
-            to { 
-              opacity: 1; 
-              transform: scale(1) translateY(0); 
-            }
-          }
-          @keyframes slideOut {
-            from { 
-              opacity: 1; 
-              transform: scale(1) translateY(0); 
-            }
-            to { 
-              opacity: 0; 
-              transform: scale(0.9) translateY(-20px); 
-            }
-          }
-        `}
-      </style>
-      <div style={{ width: 1440, margin: '0 auto', position: 'relative' }}>
-        <Sidebar />
-        
-        <HeaderBar 
+    <Layout 
           title="Menu" 
           showBackButton={true} 
-          right={(
+      right={
             <>
-              {/* Notification Bell Container */}
+          {/* Notification Bell */}
               <div 
                 onClick={() => navigate('/notifications')}
                 style={{ 
@@ -1185,31 +494,6 @@ export default function Menu() {
                 }}
               >
                 <Bell size={20} color="#FFFFFF" />
-                
-                {/* Notification Badge */}
-                <div style={{ 
-                  position: 'absolute',
-                  width: 10.4,
-                  height: 10.4,
-                  top: -2,
-                  right: -2,
-                  background: colors.accent,
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <span style={{ 
-                    fontFamily: 'Poppins',
-                    fontWeight: 400,
-                    fontSize: 5.94335,
-                    lineHeight: '9px',
-                    color: '#333333',
-                    textAlign: 'center'
-                  }}>
-                    01
-                  </span>
-                </div>
               </div>
 
               {/* Separator Line */}
@@ -1238,2011 +522,1130 @@ export default function Menu() {
                   transition: 'all 0.2s ease'
                 }}
                 onMouseEnter={(e) => {
-                  e.target.style.transform = 'scale(1.05)'
-                  e.target.style.borderColor = '#FFB6C1'
+              e.currentTarget.style.transform = 'scale(1.05)'
+              e.currentTarget.style.borderColor = colors.accent
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.transform = 'scale(1)'
-                  e.target.style.borderColor = '#FAC1D9'
+              e.currentTarget.style.transform = 'scale(1)'
+              e.currentTarget.style.borderColor = '#FAC1D9'
                 }}
               >
+            {user?.profileImage ? (
                 <img 
-                  src={user?.profileImage ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${user.profileImage}` : "/profile img icon.jpg"} 
+                src={user.profileImage} 
                   alt="Profile" 
-                  loading="lazy"
                   style={{ 
                     width: '100%',
                     height: '100%',
-                    objectFit: 'cover',
-                    borderRadius: '50%'
-                  }}
-                  onError={(e) => {
-                    // Fallback to default image if uploaded image fails to load
-                    e.target.src = "/profile img icon.jpg";
-                  }}
-                />
-              </div>
-            </>
-          )} 
-        />
-
-        <main style={{ 
-          paddingLeft: 208, 
-          paddingRight: 32, 
-          paddingTop: 20, 
-          paddingBottom: 32
-        }}>
-          
-          {/* Categories Section */}
-          <Categories
-            categories={categoriesData}
-            activeCategory={activeCategory}
-            onCategoryClick={handleCategoryClick}
-            user={user}
-            layout="horizontal"
-            showAddButton={true}
-            onAddCategory={handleAddCategory}
-            onEditCategory={handleEditCategory}
-            onDeleteCategory={handleDeleteCategory}
-          />
-
-          {/* Menu Types and Items Section */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  objectFit: 'cover' 
+                }} 
+              />
+            ) : (
             <div style={{ 
+                width: '100%', 
+                height: '100%', 
               display: 'flex', 
               alignItems: 'center', 
-              justifyContent: 'space-between',
-              marginBottom: 16,
-              marginTop: 20
-            }}>
-              <h2 style={{ 
-                fontSize: 20, 
+                justifyContent: 'center',
+                fontSize: 14,
                 fontWeight: 600, 
-                color: colors.text,
-                margin: 0
+                color: '#666'
               }}>
-                {user?.role === 'USER' ? 'Our Menu Items' : 'Special menu all items'}
-              </h2>
-              {user?.role === 'ADMIN' && (
+                {user?.name?.charAt(0).toUpperCase() || 'U'}
+              </div>
+            )}
+          </div>
+        </>
+      }
+    >
+      {/* Category Management Buttons */}
+              {canEditMenu() && (
+        <div style={{
+          display: 'flex',
+          gap: 12,
+          marginTop: 24,
+          marginBottom: 20,
+          justifyContent: 'flex-end'
+        }}>
                 <button 
-                  onClick={handleAddMenuItem}
+            onClick={handleAddCategory}
                   style={{
                     background: colors.accent,
-                    color: '#333',
+              color: '#000000',
                     border: 'none',
                     padding: '10px 20px',
                     borderRadius: 8,
-                    fontSize: 14,
-                    fontWeight: 500,
                     cursor: 'pointer',
-                    transition: 'background 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => e.target.style.background = '#E8A8C8'}
-                  onMouseLeave={(e) => e.target.style.background = colors.accent}
-                >
-                  Add Menu Item
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: 14,
+              transition: 'all 0.2s ease',
+              boxShadow: '0 2px 8px rgba(250, 193, 217, 0.3)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#E8A8C8'
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(250, 193, 217, 0.5)'
+              e.currentTarget.style.transform = 'translateY(-1px)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = colors.accent
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(250, 193, 217, 0.3)'
+              e.currentTarget.style.transform = 'translateY(0)'
+            }}
+          >
+            <FiPlus size={18} /> Add Category
                 </button>
-              )}
-            </div>
 
-            {/* Menu Type Tabs */}
-            <div style={{ 
-              display: 'flex', 
-              gap: 0, 
-              marginBottom: 10,
-              borderBottom: `1px solid ${colors.line}`,
-              marginLeft: 0,
-              marginRight: 0
-            }}>
-              {menuTypes.map((menuType) => (
                 <button
-                  key={menuType.id}
-                  onClick={() => handleMenuTypeClick(menuType.id)}
+            onClick={() => {
+              // Open manage categories modal
+              setIsManageCategoriesModalOpen(true)
+            }}
                   style={{
-                    background: 'transparent',
-                    color: activeMenuType === menuType.id ? colors.accent : colors.muted,
+              background: colors.accent,
+              color: '#000000',
                     border: 'none',
-                    padding: '12px 24px',
+              padding: '10px 20px',
+              borderRadius: 8,
                     cursor: 'pointer',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: 14,
                     transition: 'all 0.2s ease',
-                    borderBottom: activeMenuType === menuType.id ? `2px solid ${colors.accent}` : '2px solid transparent',
-                    fontWeight: activeMenuType === menuType.id ? 500 : 400
+              boxShadow: '0 2px 8px rgba(250, 193, 217, 0.3)'
                   }}
                   onMouseEnter={(e) => {
-                    if (activeMenuType !== menuType.id) {
-                      e.target.style.color = colors.text
-                    }
+              e.currentTarget.style.background = '#E8A8C8'
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(250, 193, 217, 0.5)'
+              e.currentTarget.style.transform = 'translateY(-1px)'
                   }}
                   onMouseLeave={(e) => {
-                    if (activeMenuType !== menuType.id) {
-                      e.target.style.color = colors.muted
-                    }
-                  }}
-                >
-                  {menuType.name}
+              e.currentTarget.style.background = colors.accent
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(250, 193, 217, 0.3)'
+              e.currentTarget.style.transform = 'translateY(0)'
+            }}
+          >
+            <FiEdit3 size={18} /> Edit Categories
                 </button>
-              ))}
             </div>
+      )}
 
-            {/* Menu Items Table */}
+      {/* Categories Section - Professional with Images */}
+      <Categories 
+        categories={categories}
+        activeCategory={activeCategory}
+        onCategoryClick={setActiveCategory}
+        user={user}
+        layout="horizontal"
+        showAddButton={false}
+        onAddCategory={handleAddCategory}
+        onEditCategory={handleEditCategory}
+        onDeleteCategory={handleDeleteCategory}
+      />
+
+      {/* Add Menu Item Button - Above Menu Items List */}
+      {canEditMenu() && (
             <div style={{ 
-              background: colors.panel, 
-              borderRadius: 10, 
-              overflow: 'hidden',
-              flex: 1,
               display: 'flex',
-              flexDirection: 'column',
-              marginBottom: 10,
-              marginLeft: 0,
-              marginRight: 0
-            }}>
-              {/* Table Header */}
-              <div style={{ 
-                display: 'flex',
-                alignItems: 'center',
-                padding: '12px 20px',
-                background: colors.panel,
-                borderBottom: `1px solid ${colors.line}`,
-                overflow: 'hidden'
-              }}>
-                <input
-                  type="checkbox"
-                  checked={selectedItems.length === filteredMenuItems.length && filteredMenuItems.length > 0}
-                  onChange={handleSelectAll}
+          justifyContent: 'flex-end',
+          marginBottom: 16,
+          marginTop: 24
+        }}>
+          <button
+            onClick={handleAddMenuItem}
                   style={{ 
-                    marginRight: 16,
-                    width: 16,
-                    height: 16,
+              background: colors.accent,
+              color: '#000000',
+              border: 'none',
+              padding: '12px 24px',
+              borderRadius: 8,
                     cursor: 'pointer',
-                    flexShrink: 0
-                  }}
-                />
-                <div style={{ width: 80, fontWeight: 500, fontSize: 14, color: colors.text, flexShrink: 0 }}>Product</div>
-                <div style={{ width: 250, fontWeight: 500, fontSize: 14, color: colors.text, flexShrink: 0 }}>Product Name</div>
-                <div style={{ width: 180, fontWeight: 500, fontSize: 14, color: colors.text, flexShrink: 0 }}>Item ID</div>
-                <div style={{ width: 100, fontWeight: 500, fontSize: 14, color: colors.text, flexShrink: 0 }}>Stock</div>
-                <div style={{ width: 120, fontWeight: 500, fontSize: 14, color: colors.text, flexShrink: 0 }}>Category</div>
-                <div style={{ width: 100, fontWeight: 500, fontSize: 14, color: colors.text, flexShrink: 0 }}>Price</div>
-                <div style={{ width: 120, fontWeight: 500, fontSize: 14, color: colors.text, flexShrink: 0 }}>Availability</div>
-                <div style={{ width: 120, fontWeight: 500, fontSize: 14, color: colors.text, textAlign: 'center', flexShrink: 0 }}>Actions</div>
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: 14,
+              transition: 'all 0.2s ease',
+              boxShadow: '0 2px 8px rgba(250, 193, 217, 0.3)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#E8A8C8'
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(250, 193, 217, 0.5)'
+              e.currentTarget.style.transform = 'translateY(-1px)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = colors.accent
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(250, 193, 217, 0.3)'
+              e.currentTarget.style.transform = 'translateY(0)'
+            }}
+          >
+            <FiPlus size={18} /> Add Menu Item
+          </button>
               </div>
+      )}
 
-              {/* Table Rows */}
+      {/* Menu Items List */}
               <div style={{ 
                 display: 'flex', 
                 flexDirection: 'column', 
-                overflowY: 'auto',
-                flex: 1
+        gap: 0
               }}>
-                {filteredMenuItems.map((item, index) => (
+        {filteredMenuItems.length > 0 ? (
+          filteredMenuItems.map((item, index) => (
                   <div
-                    key={item.id}
+              key={`${item.id}-${dataVersion}`}
                     style={{
+                background: colors.panel,
+                borderBottom: index < filteredMenuItems.length - 1 ? `1px solid ${colors.line}` : 'none',
+                padding: '10px 12px',
                       display: 'flex',
                       alignItems: 'center',
-                      padding: '12px 20px',
-                      background: index % 2 === 0 ? colors.panel : '#2A2D2E',
-                      borderBottom: index < filteredMenuItems.length - 1 ? `1px solid ${colors.line}` : 'none',
-                      overflow: 'hidden'
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedItems.includes(item.id)}
-                      onChange={() => handleItemSelect(item.id)}
-                      style={{ 
-                        marginRight: 16,
-                        width: 16,
-                        height: 16,
-                        cursor: 'pointer',
-                        flexShrink: 0
-                      }}
-                    />
-                    
-                    {/* Product Image */}
+                gap: 12,
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = colors.inputBg}
+              onMouseLeave={(e) => e.currentTarget.style.background = colors.panel}
+            >
+              {/* Checkbox (placeholder) */}
+              <div style={{
+                width: 18,
+                height: 18,
+                border: `2px solid ${colors.line}`,
+                borderRadius: 4
+              }} />
+
+              {/* Image */}
                     <div style={{ 
-                      width: 50, 
-                      height: 50, 
-                      background: '#333333', 
-                      borderRadius: 6,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: 16,
+                width: 80, 
+                height: 60, 
+                borderRadius: 8,
                       overflow: 'hidden',
-                      position: 'relative',
-                      flexShrink: 0
+                flexShrink: 0,
+                background: colors.inputBg
                     }}>
-                      <img 
-                        src={getImageUrl(item.image)} 
-                        alt={item.name}
-                        loading="lazy"
-                        key={`${item.id}-${item.image}`}
-                        style={{ 
-                          width: '100%', 
-                          height: '100%', 
-                          objectFit: 'cover',
-                          borderRadius: '6px'
-                        }}
-                        onError={(e) => {
-                          console.log(`Image failed to load for ${item.name}: ${item.image}`);
-                          // Fallback to placeholder if image fails to load
-                          e.target.src = '/placeholder-food.jpg';
-                        }}
-                        onLoad={() => {
-                          console.log(`Image loaded successfully for ${item.name}: ${item.image}`);
-                        }}
-                      />
+                <img
+                  src={getImageUrl(item.image)}
+          alt={item.name}
+                  onError={handleImageError}
+          style={{ 
+            width: '100%', 
+            height: '100%', 
+                    objectFit: 'cover'
+          }}
+        />
                     </div>
                     
-                    {/* Product Name */}
-                    <div style={{ width: 250, marginRight: 16, flexShrink: 0 }}>
-                        <div>
+              {/* Name & Description */}
+              <div style={{ flex: '1 1 200px', minWidth: 0 }}>
                           <div style={{ 
-                            fontWeight: 500, 
-                            fontSize: 14, 
+                  fontSize: 15, 
+                  fontWeight: 600,
                             color: colors.text,
                             marginBottom: 4
                           }}>
                             {item.name}
                           </div>
                           <div style={{ 
-                            fontSize: 12, 
+                  fontSize: 13, 
                             color: colors.muted,
-                            lineHeight: 1.4
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
                           }}>
-                            {item.description}
-                          </div>
+                  {item.description || 'No description'}
                         </div>
                     </div>
                     
-                    {/* Item ID */}
+              {/* ID */}
                     <div style={{ 
-                      width: 180, 
-                      fontSize: 14, 
-                      color: colors.text,
-                      marginRight: 16,
-                      flexShrink: 0,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {item.id}
+                flex: '0 0 100px',
+                fontSize: 13,
+                color: colors.muted
+              }}>
+                #{item.id.slice(-6)}
                     </div>
                     
                     {/* Stock */}
                     <div style={{ 
-                      width: 100, 
+                flex: '0 0 80px',
                       fontSize: 14, 
-                      color: colors.text,
-                      marginRight: 16,
-                      flexShrink: 0
+                color: colors.text
                     }}>
-                      {`${item.stock || 0} items`}
+                {item.stock} Items
                     </div>
                     
                     {/* Category */}
                     <div style={{ 
-                      width: 120, 
+                flex: '0 0 100px',
                       fontSize: 14, 
-                      color: colors.text,
-                      marginRight: 16,
-                      flexShrink: 0
+                color: colors.text
                     }}>
                       {item.category}
                     </div>
                     
                     {/* Price */}
                     <div style={{ 
-                      width: 100, 
-                      fontSize: 14, 
-                      color: colors.text,
-                      marginRight: 16,
-                      flexShrink: 0
-                    }}>
-                      {item.price}
+                flex: '0 0 80px',
+                fontSize: 16,
+                fontWeight: 600,
+                color: colors.accent
+              }}>
+                ${item.price}
                     </div>
                     
                     {/* Availability */}
                     <div style={{ 
-                      width: 120, 
-                      fontSize: 14, 
-                      color: item.availability === 'In Stock' ? '#4CAF50' : '#F44336',
-                      marginRight: 16,
-                      flexShrink: 0
+                flex: '0 0 100px'
+              }}>
+                <span style={{ 
+                  fontSize: 12,
+                  padding: '4px 12px',
+                  borderRadius: 12,
+                  background: item.availability === 'In Stock' ? '#4caf5022' : '#ff6b6b22',
+                  color: item.availability === 'In Stock' ? '#4caf50' : '#ff6b6b',
+                  fontWeight: 500
                     }}>
                       {item.availability}
+                </span>
                     </div>
                     
-                    {/* Actions */}
-                    {(user?.role === 'ADMIN' || user?.role === 'STAFF') && (
+              {/* Actions */}
+                      {canEditMenu() && (
                       <div style={{ 
-                        width: 120, 
+                flex: '0 0 80px',
                         display: 'flex', 
                         gap: 8, 
-                        justifyContent: 'center',
-                        flexShrink: 0
+                justifyContent: 'flex-end'
                       }}>
                             <button
-                              onClick={() => handleEditItem(item.id)}
+                  onClick={() => handleEditMenuItem(item)}
                               style={{
                                 background: 'transparent',
                                 border: 'none',
                                 color: colors.accent,
                                 cursor: 'pointer',
-                                padding: 8,
+                    padding: 6,
                                 borderRadius: 6,
                                 display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'center',
-                                transition: 'background 0.2s ease'
+                    transition: 'background 0.2s'
                               }}
-                              onMouseEnter={(e) => e.target.style.background = '#3D4142'}
-                              onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                  onMouseEnter={(e) => e.currentTarget.style.background = colors.inputBg}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  title="Edit"
                             >
                               <FiEdit3 size={16} />
                             </button>
-                        {/* Only show delete button for ADMIN, not for STAFF */}
                         {user?.role === 'ADMIN' && (
                             <button
-                              onClick={() => handleDeleteItem(item.id)}
+                    onClick={() => handleDeleteMenuItem(item.id)}
                               style={{
                                 background: 'transparent',
                                 border: 'none',
-                                color: '#F44336',
+                      color: '#ff6b6b',
                                 cursor: 'pointer',
-                                padding: 8,
+                      padding: 6,
                                 borderRadius: 6,
                                 display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'center',
-                                transition: 'background 0.2s ease'
+                      transition: 'background 0.2s'
                               }}
-                              onMouseEnter={(e) => e.target.style.background = '#3D4142'}
-                              onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                    onMouseEnter={(e) => e.currentTarget.style.background = colors.inputBg}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    title="Delete"
                             >
                               <FiTrash2 size={16} />
                             </button>
                         )}
                       </div>
-                    )}
+                      )}
                   </div>
-                ))}
+          ))
+        ) : (
+          <div style={{ 
+            background: colors.panel,
+            padding: 60,
+            textAlign: 'center',
+            color: colors.muted,
+            borderRadius: 10
+          }}>
+            <div style={{ fontSize: 16, marginBottom: 8 }}>No items found</div>
+            <div style={{ fontSize: 14 }}>
+              {activeCategory === 'all' 
+                ? 'Add your first menu item to get started' 
+                : 'No items in this category'}
               </div>
             </div>
-          </div>
-        </main>
+        )}
       </div>
 
-      {/* Add Category Modal */}
-      {isAddCategoryModalOpen && user?.role === 'ADMIN' && (
-        <div 
-          onClick={handleBackdropClick}
-          style={{
+      {/* Add/Edit Menu Item Modal */}
+      {(isAddMenuItemModalOpen || isEditMenuItemModalOpen) && (
+        <div style={{
             position: 'fixed',
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
-            backdropFilter: 'blur(4px)',
-            animation: 'fadeIn 0.2s ease-out',
+          background: 'rgba(0,0,0,0.8)',
             display: 'flex',
-            alignItems: 'stretch',
-            justifyContent: 'flex-end',
-            zIndex: 1000
-          }}
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: 20
+        }}
+        onClick={() => {
+          setIsAddMenuItemModalOpen(false)
+          setIsEditMenuItemModalOpen(false)
+        }}
         >
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            style={{
+          <div style={{
               background: colors.panel,
-              borderRadius: 0,
-              padding: 24,
-              width: 400,
-              height: '100vh',
-              display: 'flex',
-              flexDirection: 'column'
-            }}
+            borderRadius: 12,
+            padding: 32,
+            width: '100%',
+            maxWidth: 600,
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}
+          onClick={(e) => e.stopPropagation()}
           >
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 20
-            }}>
-              <h3 style={{
-                fontSize: 18,
-                fontWeight: 600,
-                color: colors.text,
-                margin: 0
-              }}>
-                Add New Category
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <h3 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>
+                {editingItem ? 'Edit Menu Item' : 'Add Menu Item'}
               </h3>
               <button
-                onClick={handleCloseModals}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: colors.text,
-                  cursor: 'pointer',
-                  fontSize: 20,
-                  padding: 4
-                }}
-              >
-                ×
-              </button>
-            </div>
-            
-            <div style={{
-              flex: 1,
-              overflowY: 'auto',
-              paddingRight: 8
-            }}>
-            {/* Category Image Upload */}
-            <div style={{ marginBottom: 20 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 14,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 8
-              }}>
-                Category Image
-              </label>
-              <div 
-                onClick={() => document.getElementById('newCategoryImageInput').click()}
-                style={{
-                  width: 80,
-                  height: 80,
-                  background: colors.inputBg,
-                  borderRadius: 8,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  border: '2px dashed #666',
-                  cursor: 'pointer',
-                  overflow: 'hidden',
-                  position: 'relative'
-                }}
-              >
-                {categoryImagePreview ? (
-                  <img 
-                    src={categoryImagePreview} 
-                    alt="Category preview"
-                    loading="lazy"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover'
-                    }}
-                  />
-                ) : (
-                  <span style={{ color: '#666', fontSize: 12 }}>Click to upload</span>
-                )}
-              </div>
-              <input
-                id="newCategoryImageInput"
-                type="file"
-                accept="image/*"
-                onChange={handleCategoryImageChange}
-                style={{ display: 'none' }}
-              />
-            </div>
-
-            {/* Category Name */}
-            <div style={{ marginBottom: 20 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 14,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 8
-              }}>
-                Category Name
-              </label>
-              <input
-                type="text"
-                placeholder="Enter Category name"
-                value={newCategoryForm.name}
-                onChange={(e) => setNewCategoryForm(prev => ({ ...prev, name: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 8,
-                  color: colors.text,
-                  fontSize: 14
-                }}
-              />
-            </div>
-
-            </div>
-
-            {/* Buttons */}
-            <div style={{
-              display: 'flex',
-              gap: 12,
-              justifyContent: 'flex-end'
-            }}>
-              <button
-                onClick={handleCloseModals}
-                style={{
-                  padding: '10px 20px',
-                  background: 'transparent',
-                  border: '1px solid #3D4142',
-                  borderRadius: 8,
-                  color: colors.text,
-                  cursor: 'pointer',
-                  fontSize: 14
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddCategorySubmit}
-                style={{
-                  padding: '10px 20px',
-                  background: colors.accent,
-                  border: 'none',
-                  borderRadius: 8,
-                  color: '#333',
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  fontWeight: 500
-                }}
-              >
-                Add Category
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Icon Modal (Edit New Category) */}
-      {isEditIconModalOpen && editingCategory && (user?.role === 'ADMIN' || user?.role === 'STAFF') && (
-        <div 
-          onClick={handleBackdropClick}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
-            backdropFilter: 'blur(4px)',
-            animation: 'fadeIn 0.2s ease-out',
-            display: 'flex',
-            alignItems: 'stretch',
-            justifyContent: 'flex-end',
-            zIndex: 1000
-          }}
-        >
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: colors.panel,
-              borderRadius: 0,
-              padding: 24,
-              width: 400,
-              height: '100vh',
-              display: 'flex',
-              flexDirection: 'column'
-            }}
-          >
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 20
-            }}>
-              <h3 style={{
-                fontSize: 18,
-                fontWeight: 600,
-                color: colors.text,
-                margin: 0
-              }}>
-                Edit New Category
-              </h3>
-              <button
-                onClick={handleCloseModals}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: colors.text,
-                  cursor: 'pointer',
-                  fontSize: 20,
-                  padding: 4
-                }}
-              >
-                ×
-              </button>
-            </div>
-            
-            <div style={{
-              flex: 1,
-              overflowY: 'auto',
-              paddingRight: 8
-            }}>
-            {/* Icon Display */}
-            <div style={{ marginBottom: 20 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 14,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 8
-              }}>
-                Category Icon
-              </label>
-              <div style={{
-                width: 80,
-                height: 80,
-                background: '#333333',
-                borderRadius: 8,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 8
-              }}>
-                {(() => {
-                  const currentIconData = AVAILABLE_ICONS[editIconForm.iconIndex];
-                  const IconComponent = currentIconData.component;
-                  return <IconComponent />;
-                })()}
-              </div>
-              <button 
                 onClick={() => {
-                  // Cycle through available icons using index
-                  const nextIndex = (editIconForm.iconIndex + 1) % AVAILABLE_ICONS.length;
-                  setEditIconForm(prev => ({ ...prev, iconIndex: nextIndex }));
+                  setIsAddMenuItemModalOpen(false)
+                  setIsEditMenuItemModalOpen(false)
                 }}
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: colors.accent,
-                  fontSize: 12,
+                  color: colors.muted,
                   cursor: 'pointer',
-                  textDecoration: 'underline'
-                }}>
-                Change Icon
-              </button>
-            </div>
-
-            {/* Category Name */}
-            <div style={{ marginBottom: 20 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 14,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 8
-              }}>
-                Category Name
-              </label>
-              <input
-                type="text"
-                value={editIconForm.name}
-                onChange={(e) => setEditIconForm(prev => ({ ...prev, name: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 8,
-                  color: colors.text,
-                  fontSize: 14
-                }}
-              />
-            </div>
-
-            {/* Select Menu */}
-            <div style={{ marginBottom: 20 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 14,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 8
-              }}>
-                Select Menu
-              </label>
-              <select 
-                value={editIconForm.menu}
-                onChange={(e) => setEditIconForm(prev => ({ ...prev, menu: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 8,
-                  color: colors.text,
-                  fontSize: 14
-                }}>
-                <option>Fajita</option>
-                <option>Normal Menu</option>
-                <option>Special Deals</option>
-                <option>New Year Special</option>
-                <option>Deserts and Drinks</option>
-              </select>
-            </div>
-
-            {/* Description */}
-            <div style={{ marginBottom: 24 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 14,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 8
-              }}>
-                Description
-              </label>
-              <textarea
-                value={editIconForm.description}
-                onChange={(e) => setEditIconForm(prev => ({ ...prev, description: e.target.value }))}
-                rows={4}
-                placeholder="Enter category description"
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 8,
-                  color: colors.text,
-                  fontSize: 14,
-                  resize: 'vertical'
-                }}
-              />
-            </div>
-
-            {/* Buttons */}
-            <div style={{
-              display: 'flex',
-              gap: 12,
-              justifyContent: 'flex-end'
-            }}>
-              <button
-                onClick={handleCloseModals}
-                style={{
-                  padding: '10px 20px',
-                  background: 'transparent',
-                  border: '1px solid #3D4142',
-                  borderRadius: 8,
-                  color: colors.text,
-                  cursor: 'pointer',
-                  fontSize: 14
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEditIconSave}
-                style={{
-                  padding: '10px 20px',
-                  background: colors.accent,
-                  border: 'none',
-                  borderRadius: 8,
-                  color: '#333',
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  fontWeight: 500
-                }}
-              >
-                Save Changes
-              </button>
-            </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Menu Item Modal */}
-      {isEditMenuItemModalOpen && (user?.role === 'ADMIN' || user?.role === 'STAFF') && (
-        <div 
-          onClick={handleBackdropClick}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
-            backdropFilter: 'blur(4px)',
-            animation: 'fadeIn 0.2s ease-out',
-            display: 'flex',
-            alignItems: 'stretch',
-            justifyContent: 'flex-end',
-            zIndex: 1000
-          }}
-        >
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: colors.panel,
-              borderRadius: 0,
-              padding: 24,
-              width: 400,
-              height: '100vh',
-              display: 'flex',
-              flexDirection: 'column'
-            }}
-          >
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 20
-            }}>
-              <h3 style={{
-                fontSize: 18,
-                fontWeight: 600,
-                color: colors.text,
-                margin: 0
-              }}>
-                Edit Menu Item
-              </h3>
-              <button
-                onClick={handleCloseModals}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: colors.text,
-                  cursor: 'pointer',
-                  fontSize: 20,
                   padding: 4
                 }}
               >
-                ×
+                <FiX size={24} />
               </button>
             </div>
             
-            <div style={{
-              flex: 1,
-              paddingRight: 8
-            }}>
-            {/* Product Image */}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 4
-              }}>
-                Product Image
-              </label>
-              <div 
-                onClick={() => document.getElementById('editImageInput').click()}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500 }}>Name *</label>
+              <input
+                type="text"
+                value={menuItemForm.name}
+                onChange={(e) => setMenuItemForm({ ...menuItemForm, name: e.target.value })}
+                placeholder="e.g., Grilled Chicken"
                 style={{
-                  width: 80,
-                  height: 80,
+                  width: '100%',
+                  padding: 12,
                   background: colors.inputBg,
-                  borderRadius: 6,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  border: '2px dashed #666',
-                  cursor: 'pointer',
-                  overflow: 'hidden',
-                  position: 'relative'
+                  border: `1px solid ${colors.line}`,
+                  borderRadius: 8,
+                  color: colors.text,
+                  fontSize: 14
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500 }}>Description</label>
+              <textarea
+                value={menuItemForm.description}
+                onChange={(e) => setMenuItemForm({ ...menuItemForm, description: e.target.value })}
+                placeholder="Brief description of the item"
+                rows={3}
+                style={{
+                  width: '100%',
+                  padding: 12,
+                  background: colors.inputBg,
+                  border: `1px solid ${colors.line}`,
+                  borderRadius: 8,
+                  color: colors.text,
+                  fontSize: 14,
+                  resize: 'vertical',
+                  fontFamily: 'inherit'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500 }}>Price *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={menuItemForm.price}
+                  onChange={(e) => setMenuItemForm({ ...menuItemForm, price: e.target.value })}
+                  placeholder="0.00"
+          style={{
+                    width: '100%',
+                    padding: 12,
+                    background: colors.inputBg,
+                    border: `1px solid ${colors.line}`,
+                    borderRadius: 8,
+                color: colors.text,
+                    fontSize: 14
+                  }}
+                />
+            </div>
+            
+              <div>
+                <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500 }}>Stock</label>
+              <input
+                  type="number"
+                  min="0"
+                  value={menuItemForm.stock}
+                  onChange={(e) => setMenuItemForm({ ...menuItemForm, stock: e.target.value })}
+                  placeholder="0"
+                style={{
+                  width: '100%',
+                    padding: 12,
+                  background: colors.inputBg,
+                    border: `1px solid ${colors.line}`,
+                  borderRadius: 8,
+                  color: colors.text,
+                  fontSize: 14
+                }}
+              />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500 }}>Category *</label>
+              <select 
+                value={menuItemForm.category}
+                onChange={(e) => setMenuItemForm({ ...menuItemForm, category: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: 12,
+                  background: colors.inputBg,
+                  border: `1px solid ${colors.line}`,
+                  borderRadius: 8,
+                  color: colors.text,
+                  fontSize: 14
                 }}
               >
-                {(() => {
-                  // Show preview if new image is selected
-                  if (editImagePreview) {
-                    return (
-                      <img 
-                        src={editImagePreview} 
-                        alt="Preview"
-                        loading="lazy"
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                          borderRadius: 4
-                        }}
-                      />
-                    );
-                  }
-                  
-                  // Show current image if no new image selected
-                  const currentItem = menuItemsData.find(item => item.id === editingItem);
-                  if (currentItem && currentItem.image) {
-                    return (
-                      <img 
-                        src={getImageUrl(currentItem.image)} 
-                        alt={currentItem.name}
-                        loading="lazy"
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                          borderRadius: 4
-                        }}
-                        onError={(e) => {
-                          e.target.src = '/placeholder-food.jpg';
-                        }}
-                      />
-                    );
-                  }
-                  return null;
-                })()}
-                <div style={{ 
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                <option value="">Select Category</option>
+                {categories.filter(cat => cat.id !== 'all').map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500 }}>Availability</label>
+              <select
+                value={menuItemForm.availability}
+                onChange={(e) => setMenuItemForm({ ...menuItemForm, availability: e.target.value })}
+                style={{
                   width: '100%',
-                  height: '100%',
-                  color: '#666',
-                  fontSize: 10
-                }}>
-                  <span>Upload</span>
-                </div>
-              </div>
+                  padding: 12,
+                  background: colors.inputBg,
+                  border: `1px solid ${colors.line}`,
+                  borderRadius: 8,
+                  color: colors.text,
+                  fontSize: 14
+                }}
+              >
+                <option value="In Stock">In Stock</option>
+                <option value="Out of Stock">Out of Stock</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500 }}>Image</label>
               <input
                 type="file"
-                id="editImageInput"
                 accept="image/*"
-                onChange={handleEditImageChange}
-                style={{ display: 'none' }}
+                onChange={handleImageChange}
+                style={{
+                  width: '100%',
+                  padding: 12,
+                  background: colors.inputBg,
+                  border: `1px solid ${colors.line}`,
+                  borderRadius: 8,
+                  color: colors.text,
+                  fontSize: 14
+                }}
+              />
+              {imagePreview && (
+                <div style={{ marginTop: 12, position: 'relative' }}>
+                  <img
+                    src={imagePreview}
+                        alt="Preview"
+                        style={{
+                          width: '100%',
+                      height: 200,
+                          objectFit: 'cover',
+                      borderRadius: 8
+                    }}
               />
               <button 
-                onClick={() => document.getElementById('editImageInput').click()}
+                    onClick={() => {
+                      setImageFile(null)
+                      setImagePreview(null)
+                    }}
                 style={{
-                  background: 'transparent',
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      background: 'rgba(0,0,0,0.7)',
                   border: 'none',
-                  color: colors.accent,
-                  fontSize: 10,
+                      color: colors.text,
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
                   cursor: 'pointer',
-                  marginTop: 2,
-                  textDecoration: 'underline'
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
                 }}
               >
-                {editImageFile ? 'Change Image' : 'Change'}
+                    <FiX size={18} />
               </button>
             </div>
-
-            {/* Product Name */}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 4
-              }}>
-                Product Name
-              </label>
-              <input
-                type="text"
-                placeholder="Enter product name"
-                value={editFormData.name || ''}
-                onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 6,
-                  color: colors.text,
-                  fontSize: 12
-                }}
-              />
+              )}
             </div>
 
-            {/* Description */}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 4
-              }}>
-                Description
-              </label>
-              <textarea
-                placeholder="Enter product description"
-                value={editFormData.description || ''}
-                onChange={(e) => setEditFormData(prev => ({ ...prev, description: e.target.value }))}
-                rows={2}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 6,
-                  color: colors.text,
-                  fontSize: 12,
-                  resize: 'none'
-                }}
-              />
-            </div>
-
-            {/* Price */}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 4
-              }}>
-                Price
-              </label>
-              <input
-                type="number"
-                placeholder="0.00"
-                step="0.01"
-                value={editFormData.price || ''}
-                onChange={(e) => setEditFormData(prev => ({ ...prev, price: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 6,
-                  color: colors.text,
-                  fontSize: 12
-                }}
-              />
-            </div>
-
-            {/* Category */}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 4
-              }}>
-                Category
-              </label>
-              <select 
-                value={editFormData.category || ''}
-                onChange={(e) => setEditFormData(prev => ({ ...prev, category: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 6,
-                  color: colors.text,
-                  fontSize: 12
-                }}
-              >
-                <option value="">Select category</option>
-                {categoriesData.filter(cat => cat.id !== 'all').map(cat => (
-                  <option key={cat.id || cat.name} value={cat.name}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Stock */}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 4
-              }}>
-                Stock Quantity
-              </label>
-              <input
-                type="number"
-                placeholder="0"
-                value={editFormData.stock || ''}
-                onChange={(e) => setEditFormData(prev => ({ ...prev, stock: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 6,
-                  color: colors.text,
-                  fontSize: 12
-                }}
-              />
-            </div>
-
-            {/* Availability */}
-            <div style={{ marginBottom: 16 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 4
-              }}>
-                Availability
-              </label>
-              <select 
-                value={editFormData.availability || ''}
-                onChange={(e) => setEditFormData(prev => ({ ...prev, availability: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 6,
-                  color: colors.text,
-                  fontSize: 12
-                }}
-              >
-                <option value="In Stock">In Stock</option>
-                <option value="Out of Stock">Out of Stock</option>
-              </select>
-            </div>
-
-            {/* Buttons */}
-            <div style={{
-              display: 'flex',
-              gap: 12,
-              justifyContent: 'flex-end'
-            }}>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
               <button
-                onClick={handleCancelEdit}
+                onClick={() => {
+                  setIsAddMenuItemModalOpen(false)
+                  setIsEditMenuItemModalOpen(false)
+                }}
+                disabled={saving}
                 style={{
-                  padding: '10px 20px',
-                  background: 'transparent',
-                  border: '1px solid #3D4142',
-                  borderRadius: 8,
+                  padding: '12px 24px',
+                  background: colors.inputBg,
                   color: colors.text,
-                  cursor: 'pointer',
-                  fontSize: 14
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  fontSize: 14,
+                fontWeight: 500,
+                  opacity: saving ? 0.6 : 1
                 }}
               >
                 Cancel
               </button>
               <button
-                onClick={handleSaveEdit}
+                onClick={handleSaveMenuItem}
+                disabled={saving}
                 style={{
-                  padding: '10px 20px',
+                  padding: '12px 24px',
                   background: colors.accent,
+                  color: colors.bg,
                   border: 'none',
                   borderRadius: 8,
-                  color: '#333',
-                  cursor: 'pointer',
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  fontWeight: 600,
                   fontSize: 14,
-                  fontWeight: 500
+                  opacity: saving ? 0.6 : 1
                 }}
               >
-                Save Changes
+                {saving ? 'Saving...' : 'Save Item'}
               </button>
-            </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Add Menu Item Modal */}
-      {isAddMenuItemModalOpen && user?.role === 'ADMIN' && (
-        <div 
-          onClick={handleBackdropClick}
-          style={{
+      {/* Add/Edit Category Modal */}
+      {(isAddCategoryModalOpen || isEditCategoryModalOpen) && (
+        <div style={{
             position: 'fixed',
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
-            backdropFilter: 'blur(4px)',
-            animation: 'fadeIn 0.2s ease-out',
+          background: 'rgba(0,0,0,0.8)',
             display: 'flex',
-            alignItems: 'stretch',
-            justifyContent: 'flex-end',
-            zIndex: 1000
-          }}
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: 20
+        }}
+        onClick={() => {
+          setIsAddCategoryModalOpen(false)
+          setIsEditCategoryModalOpen(false)
+        }}
         >
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            style={{
+          <div style={{
               background: colors.panel,
-              borderRadius: 0,
-              padding: 24,
-              width: 400,
-              height: '100vh',
-              display: 'flex',
-              flexDirection: 'column'
-            }}
+            borderRadius: 12,
+            padding: 32,
+            width: '100%',
+            maxWidth: 400
+          }}
+          onClick={(e) => e.stopPropagation()}
           >
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 20
-            }}>
-              <h3 style={{
-                fontSize: 18,
-                fontWeight: 600,
-                color: colors.text,
-                margin: 0
-              }}>
-                Add New Menu Item
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <h3 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>
+                {editingCategory ? 'Edit Category' : 'Add Category'}
               </h3>
               <button
-                onClick={handleCloseModals}
+                onClick={() => {
+                  setIsAddCategoryModalOpen(false)
+                  setIsEditCategoryModalOpen(false)
+                }}
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: colors.text,
+                  color: colors.muted,
                   cursor: 'pointer',
-                  fontSize: 20,
                   padding: 4
                 }}
               >
-                ×
+                <FiX size={24} />
               </button>
             </div>
             
-            <div style={{
-              flex: 1,
-              paddingRight: 8
-            }}>
-            {/* Product Image */}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 4
-              }}>
-                Product Image
-              </label>
-              <div 
-                onClick={() => document.getElementById('addImageInput').click()}
-                style={{
-                  width: 80,
-                  height: 80,
-                  background: colors.inputBg,
-                  borderRadius: 6,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  border: '2px dashed #666',
-                  cursor: 'pointer',
-                  overflow: 'hidden',
-                  position: 'relative'
-                }}>
-                {addImagePreview ? (
-                  <img 
-                    src={addImagePreview} 
-                    alt="Preview"
-                    loading="lazy"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      borderRadius: 4
-                    }}
-                  />
-                ) : (
-                  <span style={{ color: '#666', fontSize: 10 }}>Upload</span>
-                )}
-              </div>
-              <input
-                id="addImageInput"
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files[0];
-                  if (file) {
-                    setAddImageFile(file);
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                      setAddImagePreview(reader.result);
-                    };
-                    reader.readAsDataURL(file);
-                  }
-                }}
-                style={{ display: 'none' }}
-                aria-label="Upload product image"
-              />
-              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                <button 
-                  onClick={() => document.getElementById('addImageInput').click()}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: colors.accent,
-                    fontSize: 10,
-                    cursor: 'pointer',
-                    textDecoration: 'underline'
-                  }}>
-                  Change
-                </button>
-                {addImagePreview && (
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setAddImageFile(null);
-                      setAddImagePreview(null);
-                    }}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#ff4444',
-                      fontSize: 10,
-                      cursor: 'pointer',
-                      textDecoration: 'underline'
-                    }}>
-                    Remove
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Product Name */}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 4
-              }}>
-                Product Name
-              </label>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500 }}>Name *</label>
               <input
                 type="text"
-                placeholder="Enter product name"
-                value={addMenuItemForm.name}
-                onChange={(e) => setAddMenuItemForm(prev => ({ ...prev, name: e.target.value }))}
+                value={categoryForm.name}
+                onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
+                placeholder="e.g., Chicken, Pizza"
                 style={{
                   width: '100%',
-                  padding: '8px',
+                  padding: 12,
                   background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 6,
-                  color: colors.text,
-                  fontSize: 12
-                }}
-              />
-            </div>
-
-            {/* Description */}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 4
-              }}>
-                Description
-              </label>
-              <textarea
-                placeholder="Enter product description"
-                value={addMenuItemForm.description}
-                onChange={(e) => setAddMenuItemForm(prev => ({ ...prev, description: e.target.value }))}
-                rows={2}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 6,
-                  color: colors.text,
-                  fontSize: 12,
-                  resize: 'none'
-                }}
-              />
-            </div>
-
-            {/* Price */}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 4
-              }}>
-                Price
-              </label>
-              <input
-                type="number"
-                placeholder="0.00"
-                step="0.01"
-                value={addMenuItemForm.price}
-                onChange={(e) => setAddMenuItemForm(prev => ({ ...prev, price: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 6,
-                  color: colors.text,
-                  fontSize: 12
-                }}
-              />
-            </div>
-
-            {/* Category */}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 4
-              }}>
-                Category
-              </label>
-              <select 
-                value={addMenuItemForm.category}
-                onChange={(e) => setAddMenuItemForm(prev => ({ ...prev, category: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 6,
-                  color: colors.text,
-                  fontSize: 12
-                }}
-              >
-                <option value="">Select category</option>
-                {categoriesData.filter(cat => cat.id !== 'all').map(cat => (
-                  <option key={cat.id || cat.name} value={cat.name}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Stock */}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 4
-              }}>
-                Stock Quantity
-              </label>
-              <input
-                type="number"
-                placeholder="0"
-                value={addMenuItemForm.stock}
-                onChange={(e) => setAddMenuItemForm(prev => ({ ...prev, stock: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 6,
-                  color: colors.text,
-                  fontSize: 12
-                }}
-              />
-            </div>
-
-            {/* Availability */}
-            <div style={{ marginBottom: 16 }}>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 500,
-                color: colors.text,
-                marginBottom: 4
-              }}>
-                Availability
-              </label>
-              <select 
-                value={addMenuItemForm.availability}
-                onChange={(e) => setAddMenuItemForm(prev => ({ ...prev, availability: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  background: colors.inputBg,
-                  border: '1px solid #3D4142',
-                  borderRadius: 6,
-                  color: colors.text,
-                  fontSize: 12
-                }}
-              >
-                <option value="In Stock">In Stock</option>
-                <option value="Out of Stock">Out of Stock</option>
-              </select>
-            </div>
-
-            {/* Buttons */}
-            <div style={{
-              display: 'flex',
-              gap: 12,
-              justifyContent: 'flex-end'
-            }}>
-              <button
-                onClick={handleCloseModals}
-                style={{
-                  padding: '10px 20px',
-                  background: 'transparent',
-                  border: '1px solid #3D4142',
+                  border: `1px solid ${colors.line}`,
                   borderRadius: 8,
                   color: colors.text,
-                  cursor: 'pointer',
                   fontSize: 14
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500 }}>Image (Optional)</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                style={{
+                  width: '100%',
+                  padding: 12,
+                  background: colors.inputBg,
+                  border: `1px solid ${colors.line}`,
+                  borderRadius: 8,
+                  color: colors.text,
+                  fontSize: 14
+                }}
+              />
+              {imagePreview && (
+                <div style={{ marginTop: 12, position: 'relative' }}>
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                style={{
+                  width: '100%',
+                      height: 150,
+                      objectFit: 'cover',
+                      borderRadius: 8
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      setImageFile(null)
+                      setImagePreview(null)
+                    }}
+                style={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      background: 'rgba(0,0,0,0.7)',
+                      border: 'none',
+                  color: colors.text,
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <FiX size={18} />
+                  </button>
+            </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setIsAddCategoryModalOpen(false)
+                  setIsEditCategoryModalOpen(false)
+                }}
+                disabled={saving}
+                style={{
+                  padding: '12px 24px',
+                  background: colors.inputBg,
+                  color: colors.text,
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  opacity: saving ? 0.6 : 1
                 }}
               >
                 Cancel
               </button>
               <button
-                onClick={handleAddMenuItemSubmit}
+                onClick={handleSaveCategory}
+                disabled={saving}
                 style={{
-                  padding: '10px 20px',
+                  padding: '12px 24px',
                   background: colors.accent,
+                  color: colors.bg,
                   border: 'none',
                   borderRadius: 8,
-                  color: '#333',
-                  cursor: 'pointer',
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  fontWeight: 600,
                   fontSize: 14,
-                  fontWeight: 500
+                  opacity: saving ? 0.6 : 1
                 }}
               >
-                Add Item
+                {saving ? 'Saving...' : 'Save Category'}
               </button>
-            </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Edit Category Modal */}
-      {isEditCategoryModalOpen && (user?.role === 'ADMIN' || user?.role === 'STAFF') && (
-        <div 
-          onClick={handleBackdropClick}
-          style={{
+      {/* Manage Categories Modal */}
+      {isManageCategoriesModalOpen && (
+        <div style={{
             position: 'fixed',
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
-            backdropFilter: 'blur(10px)',
-            animation: 'fadeIn 0.3s ease-out',
+          background: 'rgba(0,0,0,0.8)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 1000,
-            padding: '20px'
+          padding: 20
           }}
+        onClick={() => setIsManageCategoriesModalOpen(false)}
         >
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            style={{
+          <div style={{
               background: colors.panel,
-              borderRadius: '20px',
-              padding: 0,
+            borderRadius: 12,
+            padding: 32,
               width: '100%',
-              maxWidth: '700px',
-              maxHeight: '90vh',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 25px 80px rgba(0, 0, 0, 0.6)',
-              border: `1px solid ${colors.line}`,
-              overflow: 'hidden',
-              animation: 'slideIn 0.3s ease-out'
-            }}
+            maxWidth: 600,
+            maxHeight: '80vh',
+            overflowY: 'auto'
+          }}
+          onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(250, 193, 217, 0.1) 0%, rgba(250, 193, 217, 0.05) 100%)',
-              padding: '24px 32px',
-              borderBottom: `1px solid ${colors.line}`,
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <div>
-                <h2 style={{
-                  fontSize: '24px',
-                  fontWeight: 700,
-                  color: colors.text,
-                  margin: 0,
-                  letterSpacing: '-0.5px'
-                }}>
-                  {editingCategoryData ? 'Edit Category' : 'Manage Categories'}
-                </h2>
-                <p style={{
-                  fontSize: '14px',
-                  color: colors.muted,
-                  margin: '4px 0 0 0'
-                }}>
-                  {editingCategoryData ? 'Update category details' : 'Organize your menu categories'}
-                </p>
-              </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <h3 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>
+                Manage Categories
+              </h3>
               <button
-                onClick={handleCloseModals}
+                onClick={() => setIsManageCategoriesModalOpen(false)}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.1)',
+                  background: 'transparent',
                   border: 'none',
-                  color: colors.text,
-                  fontSize: '20px',
+                  color: colors.muted,
                   cursor: 'pointer',
-                  padding: '12px',
-                  borderRadius: '12px',
-                  transition: 'all 0.2s ease',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.background = 'rgba(255, 255, 255, 0.2)'
-                  e.target.style.transform = 'scale(1.1)'
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.background = 'rgba(255, 255, 255, 0.1)'
-                  e.target.style.transform = 'scale(1)'
+                  padding: 4
                 }}
               >
-                ×
+                <FiX size={24} />
               </button>
             </div>
             
-            {/* Modal Content */}
-            <div style={{
-              flex: 1,
-              padding: '32px',
-              overflowY: 'auto'
-            }}>
-              {editingCategoryData ? (
-                // Individual category editing
-                <>
-                  {/* Category Name */}
-                  <div style={{ marginBottom: 24 }}>
-                    <label style={{
-                      display: 'block',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      color: colors.text,
-                      marginBottom: 8
-                    }}>
-                      Category Name
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Enter category name"
-                      value={editCategoryForm.name}
-                      onChange={(e) => setEditCategoryForm(prev => ({ ...prev, name: e.target.value }))}
-                      style={{
-                        width: '100%',
-                        padding: '14px 16px',
-                        background: colors.inputBg,
-                        border: `2px solid ${colors.line}`,
-                        borderRadius: '12px',
-                        color: colors.text,
-                        fontSize: '14px',
-                        transition: 'all 0.2s ease',
-                        outline: 'none'
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = colors.accent
-                        e.target.style.background = '#3D4142'
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = colors.line
-                        e.target.style.background = colors.inputBg
-                      }}
-                    />
+            <div style={{ marginBottom: 16, color: colors.muted, fontSize: 14 }}>
+              Click on a category to edit or delete it
                   </div>
 
-                  {/* Category Image */}
-                  <div style={{ marginBottom: 32 }}>
-                    <label style={{
-                      display: 'block',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      color: colors.text,
-                      marginBottom: 12
-                    }}>
-                      Category Image
-                    </label>
-                    <div 
-                      onClick={() => document.getElementById('categoryImageInput').click()}
+            {/* Categories List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {categories.filter(cat => cat.id !== 'all').map(category => (
+                <div
+                  key={category.id}
                       style={{
-                        width: '120px',
-                        height: '120px',
                         background: colors.inputBg,
-                        borderRadius: '16px',
+                    borderRadius: 8,
+                    padding: 16,
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        border: `2px dashed ${colors.line}`,
-                        cursor: 'pointer',
-                        overflow: 'hidden',
-                        position: 'relative',
+                    justifyContent: 'space-between',
+                    border: `1px solid ${colors.line}`,
                         transition: 'all 0.2s ease'
                       }}
                       onMouseEnter={(e) => {
-                        e.target.style.borderColor = colors.accent
-                        e.target.style.transform = 'scale(1.02)'
+                    e.currentTarget.style.background = colors.line
+                    e.currentTarget.style.borderColor = colors.accent
                       }}
                       onMouseLeave={(e) => {
-                        e.target.style.borderColor = colors.line
-                        e.target.style.transform = 'scale(1)'
-                      }}
-                    >
-                      {categoryImagePreview ? (
-                        <img 
-                          src={categoryImagePreview} 
-                          alt="Category preview"
-                          loading="lazy"
+                    e.currentTarget.style.background = colors.inputBg
+                    e.currentTarget.style.borderColor = colors.line
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+                    {/* Category Image */}
+                    {category.image && (
+                      <div style={{ 
+                        width: 40, 
+                        height: 40, 
+                        borderRadius: 8,
+                        overflow: 'hidden',
+                        background: colors.panel
+                      }}>
+                        <img
+                          src={getImageUrl(category.image)}
+                          alt={category.name}
+                          onError={handleImageError}
                           style={{
                             width: '100%',
                             height: '100%',
-                            objectFit: 'cover',
-                            borderRadius: '14px'
+                            objectFit: 'cover'
                           }}
                         />
-                      ) : (
-                        <div style={{
-                          color: colors.muted,
-                          fontSize: '14px',
-                          textAlign: 'center',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          gap: 8
-                        }}>
-                          <div style={{ fontSize: '24px' }}>📷</div>
-                          <div>Click to upload</div>
                         </div>
                       )}
-                    </div>
-                    <input
-                      id="categoryImageInput"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleCategoryImageChange}
-                      style={{ display: 'none' }}
-                    />
-                    <p style={{
-                      fontSize: '12px',
-                      color: colors.muted,
-                      margin: '8px 0 0 0'
-                    }}>
-                      Recommended: 200x200px or larger
-                    </p>
-                  </div>
-                </>
-              ) : (
-                // Bulk category management - show all categories
-                <div style={{ marginBottom: 20 }}>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: 12
-                  }}>
-                    <label style={{
-                      fontSize: 14,
-                      fontWeight: 600,
-                      color: colors.text,
-                      margin: 0
-                    }}>
-                      All Categories ({categoriesData.filter(cat => cat.id !== 'all').length})
-                    </label>
-                    <div style={{
-                      fontSize: 12,
-                      color: colors.muted,
-                      background: 'rgba(255,255,255,0.05)',
-                      padding: '4px 8px',
-                      borderRadius: 6
-                    }}>
-                      Total Items: {categoriesData.reduce((sum, cat) => sum + (cat.count || 0), 0)}
-                    </div>
-                  </div>
-                  <div style={{
-                    maxHeight: '400px',
-                    overflowY: 'auto',
-                    border: `1px solid ${colors.line}`,
-                    borderRadius: 8,
-                    padding: 12,
-                    background: 'rgba(255,255,255,0.02)'
-                  }}>
-                    {categoriesData.filter(cat => cat.id !== 'all').length === 0 ? (
-                      <div style={{
-                        textAlign: 'center',
-                        padding: '40px 20px',
-                        color: colors.muted,
-                        fontSize: 14
-                      }}>
-                        No categories found. Create your first category to get started.
-                      </div>
-                    ) : (
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                        gap: 12
-                      }}>
-                        {categoriesData.filter(cat => cat.id !== 'all').map((category) => (
-                          <div key={category.id} style={{
-                            background: colors.panel,
-                            border: `1px solid ${colors.line}`,
-                            borderRadius: 8,
-                            padding: 16,
-                            transition: 'all 0.2s ease',
-                            cursor: 'pointer'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.target.style.borderColor = colors.accent
-                            e.target.style.transform = 'translateY(-2px)'
-                            e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)'
-                          }}
-                          onMouseLeave={(e) => {
-                            e.target.style.borderColor = colors.line
-                            e.target.style.transform = 'translateY(0px)'
-                            e.target.style.boxShadow = 'none'
-                          }}
-                          >
-                            <div style={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              justifyContent: 'space-between',
-                              marginBottom: 12
-                            }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                <div style={{ 
-                                  width: 40, 
-                                  height: 40, 
-                                  background: 'rgba(250, 193, 217, 0.1)',
-                                  borderRadius: 8,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}>
-                                  {getCategoryIcon(category.name)}
-                                </div>
-                                <div>
-                                  <div style={{ 
-                                    fontSize: 14, 
-                                    fontWeight: 600, 
-                                    color: colors.text,
-                                    marginBottom: 2
-                                  }}>
+                    
+                    {/* Category Name and Count */}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: colors.text }}>
                                     {category.name}
                                   </div>
-                                  <div style={{ 
-                                    fontSize: 12, 
-                                    color: colors.muted
-                                  }}>
+                      <div style={{ fontSize: 13, color: colors.muted }}>
                                     {category.count} items
                                   </div>
                                 </div>
                               </div>
-                            </div>
-                            <div style={{ 
-                              display: 'flex', 
-                              gap: 8,
-                              justifyContent: 'flex-end'
-                            }}>
+
+                  {/* Action Buttons */}
+                  <div style={{ display: 'flex', gap: 8 }}>
                               <button
-                                onClick={() => handleEditCategory(category)}
+                      onClick={() => {
+                        handleEditCategory(category)
+                        setIsManageCategoriesModalOpen(false)
+                      }}
                                 style={{
                                   background: colors.accent,
+                        color: '#000000',
                                   border: 'none',
-                                  color: '#333',
-                                  cursor: 'pointer',
                                   padding: '8px 16px',
                                   borderRadius: 6,
-                                  fontSize: 12,
+                        cursor: 'pointer',
+                        fontSize: 13,
                                   fontWeight: 500,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
                                   transition: 'all 0.2s ease'
                                 }}
-                                onMouseEnter={(e) => e.target.style.background = '#E8A8C8'}
-                                onMouseLeave={(e) => e.target.style.background = colors.accent}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#E8A8C8'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = colors.accent}
                               >
-                                Edit Category
+                      <FiEdit3 size={14} /> Edit
                               </button>
+                              {user?.role === 'ADMIN' && (
                               <button
-                                onClick={() => handleDeleteCategory(category.id)}
+                      onClick={() => {
+                        handleDeleteCategory(category.id)
+                      }}
                                 style={{
                                   background: 'transparent',
-                                  border: '1px solid #F44336',
-                                  color: '#F44336',
-                                  cursor: 'pointer',
+                        color: '#ff6b6b',
+                        border: `1px solid #ff6b6b`,
                                   padding: '8px 16px',
                                   borderRadius: 6,
-                                  fontSize: 12,
+                        cursor: 'pointer',
+                        fontSize: 13,
                                   fontWeight: 500,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
                                   transition: 'all 0.2s ease'
                                 }}
                                 onMouseEnter={(e) => {
-                                  e.target.style.background = '#F44336';
-                                  e.target.style.color = '#FFFFFF';
+                        e.currentTarget.style.background = '#ff6b6b'
+                        e.currentTarget.style.color = '#FFFFFF'
                                 }}
                                 onMouseLeave={(e) => {
-                                  e.target.style.background = 'transparent';
-                                  e.target.style.color = '#F44336';
+                        e.currentTarget.style.background = 'transparent'
+                        e.currentTarget.style.color = '#ff6b6b'
                                 }}
                               >
-                                Delete
+                      <FiTrash2 size={14} /> Delete
                               </button>
+                              )}
                             </div>
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
 
-            {/* Modal Footer */}
-            <div style={{
-              background: 'rgba(255, 255, 255, 0.02)',
-              padding: '24px 32px',
-              borderTop: `1px solid ${colors.line}`,
-              display: 'flex',
-              gap: 16,
-              justifyContent: 'flex-end'
-            }}>
+            {/* Add New Category Button */}
               <button
-                onClick={handleCloseModals}
+              onClick={() => {
+                setIsManageCategoriesModalOpen(false)
+                handleAddCategory()
+              }}
                 style={{
-                  padding: '12px 24px',
+                marginTop: 20,
+                width: '100%',
                   background: 'transparent',
-                  border: `2px solid ${colors.line}`,
-                  borderRadius: '12px',
-                  color: colors.text,
-                  fontSize: '14px',
+                color: colors.accent,
+                border: `2px dashed ${colors.accent}`,
+                padding: '16px',
+                borderRadius: 8,
                   cursor: 'pointer',
+                fontSize: 14,
                   fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
                   transition: 'all 0.2s ease'
                 }}
                 onMouseEnter={(e) => {
-                  e.target.style.borderColor = colors.accent
-                  e.target.style.background = 'rgba(250, 193, 217, 0.1)'
+                e.currentTarget.style.background = 'rgba(250, 193, 217, 0.1)'
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.borderColor = colors.line
-                  e.target.style.background = 'transparent'
+                e.currentTarget.style.background = 'transparent'
                 }}
               >
-                {editingCategoryData ? 'Cancel' : 'Close'}
+              <FiPlus size={18} /> Add New Category
               </button>
-              {editingCategoryData && (
+                  </div>
+                </div>
+              )}
+
+      {/* Confirmation Dialog */}
+      {confirmDialog.show && (
+            <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+              display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}
+        onClick={closeConfirmDialog}
+        >
+          <div 
+            style={{
+              background: colors.panel,
+              borderRadius: '12px',
+              padding: '24px',
+              width: '400px',
+              maxWidth: '90%',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{
+              margin: '0 0 16px 0',
+              fontSize: '18px',
+              fontWeight: '600',
+              color: colors.text
+            }}>
+              {confirmDialog.title}
+            </h3>
+
+            <p style={{
+              margin: '0 0 24px 0',
+              fontSize: '14px',
+              color: colors.muted,
+              lineHeight: '1.5'
+            }}>
+              {confirmDialog.message}
+            </p>
+
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={closeConfirmDialog}
+                style={{
+                  padding: '10px 20px',
+                  background: 'transparent',
+                  border: `1px solid ${colors.line}`,
+                  borderRadius: '8px',
+                  color: colors.text,
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = colors.line
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent'
+                }}
+              >
+                Cancel
+              </button>
                 <button
-                  onClick={handleEditCategorySubmit}
+                onClick={() => {
+                  if (confirmDialog.onConfirm) {
+                    confirmDialog.onConfirm()
+                  }
+                }}
                   style={{
-                    padding: '12px 24px',
-                    background: colors.accent,
+                  padding: '10px 20px',
+                  background: '#DC3545',
                     border: 'none',
-                    borderRadius: '12px',
-                    color: '#000',
+                  borderRadius: '8px',
+                  color: '#FFFFFF',
                     fontSize: '14px',
+                  fontWeight: '600',
                     cursor: 'pointer',
-                    fontWeight: 600,
                     transition: 'all 0.2s ease',
-                    boxShadow: '0 4px 15px rgba(250, 193, 217, 0.3)'
+                  boxShadow: '0 2px 8px rgba(220, 53, 69, 0.4)'
                   }}
                   onMouseEnter={(e) => {
-                    e.target.style.background = '#E8A8C8'
-                    e.target.style.transform = 'translateY(-2px)'
-                    e.target.style.boxShadow = '0 6px 20px rgba(250, 193, 217, 0.4)'
+                  e.currentTarget.style.background = '#C82333'
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 53, 69, 0.6)'
+                  e.currentTarget.style.transform = 'translateY(-1px)'
                   }}
                   onMouseLeave={(e) => {
-                    e.target.style.background = colors.accent
-                    e.target.style.transform = 'translateY(0px)'
-                    e.target.style.boxShadow = '0 4px 15px rgba(250, 193, 217, 0.3)'
-                  }}
-                >
-                  Update Category
+                  e.currentTarget.style.background = '#DC3545'
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 53, 69, 0.4)'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                }}
+              >
+                Delete
                 </button>
-              )}
             </div>
           </div>
         </div>
       )}
-    </div>
+
+      {/* Toast Notification */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ show: false, message: '', type: 'success' })}
+      />
+    </Layout>
   )
 }

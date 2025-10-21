@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiEye, FiEdit3, FiTrash2 } from 'react-icons/fi';
 import { Bell } from 'lucide-react';
@@ -6,6 +6,8 @@ import { useUser } from './UserContext';
 import Sidebar from './Sidebar.jsx';
 import HeaderBar from './HeaderBar.jsx';
 import AddEditPanel from './AddEditPanel.jsx';
+import Toast from '../components/Toast.jsx';
+import api from '../utils/apiClient';
 
 const colors = {
   bg: '#111315',
@@ -121,7 +123,7 @@ function Header({ onAdd, count, activeTab, setActiveTab, sortBy, sortOrder, onSo
 
         </>
       )} />
-      <div style={{ marginLeft: 176, marginTop: 30, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="page-main-content" style={{ marginTop: 30, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 0, paddingBottom: 0 }}>
         <div style={{ fontSize: 25, fontWeight: 500 }}>Staff ({count})</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {/* Only show Add Staff button for ADMIN users */}
@@ -230,7 +232,7 @@ function Header({ onAdd, count, activeTab, setActiveTab, sortBy, sortOrder, onSo
           </div>
         </div>
       </div>
-      <div style={{ marginLeft: 208, paddingLeft: 20, marginTop: 16, display: 'flex', alignItems: 'center', gap: 35 }}>
+      <div className="page-main-content" style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 35, paddingTop: 0, paddingBottom: 0 }}>
         <button 
           onClick={() => setActiveTab('management')} 
           style={{ 
@@ -306,12 +308,12 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user }) {
       onMouseLeave={() => setIsHovered(false)}
       style={{ 
         width: '100%',
-        height: 70, 
+        minHeight: 70, 
         background: isHovered ? '#3D4142' : colors.panel, 
         display: 'flex', 
         alignItems: 'center', 
-        padding: '0 20px',
-        marginBottom: 1,
+        padding: '12px 20px',
+        marginBottom: 0,
         cursor: 'pointer',
         transition: 'background 0.2s ease'
       }}>
@@ -321,7 +323,8 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 20
+        marginRight: 15,
+        flexShrink: 0
       }}>
         <div style={{ 
           width: 16,
@@ -333,45 +336,50 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user }) {
       
       {/* ID */}
       <div style={{ 
-        width: 60,
+        width: 50,
         fontFamily: 'Poppins',
         fontWeight: 400,
         fontSize: 14,
         color: '#FFFFFF',
-        marginRight: 30
+        marginRight: 20,
+        flexShrink: 0
       }}>
         {staff.id}
       </div>
       
       {/* Name and Role with Profile Picture */}
       <div style={{ 
-        width: 200,
+        width: 220,
         display: 'flex',
         alignItems: 'center',
-        gap: 12,
-        marginRight: 30
+        gap: 10,
+        marginRight: 20,
+        flexShrink: 0
       }}>
         {/* Profile Picture */}
         <div style={{ 
-          width: 27,
-          height: 27,
+          width: 35,
+          height: 35,
           borderRadius: '50%',
           border: '1px solid #FAC1D9',
           background: '#111827',
-          flex: 'none',
+          flexShrink: 0,
           overflow: 'hidden',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'
         }}>
           <img 
-            src="/client img.png" 
+            src={staff.profileImage ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${staff.profileImage}` : "/client img.png"}
             alt={staff.name}
             style={{
               width: '100%',
               height: '100%',
               objectFit: 'cover',
               borderRadius: '50%'
+            }}
+            onError={(e) => {
+              e.target.src = "/client img.png";
             }}
           />
         </div>
@@ -381,21 +389,27 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user }) {
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
-          alignItems: 'flex-start'
+          alignItems: 'flex-start',
+          flex: 1,
+          minWidth: 0
         }}>
           <div style={{ 
             fontFamily: 'Poppins',
-            fontWeight: 400,
-            fontSize: 14,
+            fontWeight: 500,
+            fontSize: 13,
             color: '#FFFFFF',
-            marginBottom: 2
+            marginBottom: 2,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            width: '100%'
           }}>
             {staff.name}
           </div>
           <div style={{ 
             fontFamily: 'Poppins',
             fontWeight: 400,
-            fontSize: 12,
+            fontSize: 11,
             color: '#FAC1D9'
           }}>
             {staff.role}
@@ -408,62 +422,70 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user }) {
         width: 200,
         fontFamily: 'Poppins',
         fontWeight: 400,
-        fontSize: 14,
+        fontSize: 13,
         color: '#FFFFFF',
-        marginRight: 30
+        marginRight: 20,
+        flexShrink: 0,
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
       }}>
         {staff.email}
       </div>
       
       {/* Phone */}
       <div style={{ 
-        width: 150,
+        width: 130,
         fontFamily: 'Poppins',
         fontWeight: 400,
-        fontSize: 14,
-        color: '#FFFFFF',
-        marginRight: 30
+        fontSize: 13,
+        color: staff.phone ? '#FFFFFF' : '#777979',
+        marginRight: 20,
+        flexShrink: 0
       }}>
-        {staff.phone}
+        {staff.phone || '-'}
       </div>
       
       {/* Age */}
       <div style={{ 
-        width: 80,
+        width: 60,
         fontFamily: 'Poppins',
         fontWeight: 400,
-        fontSize: 14,
-        color: '#FFFFFF',
+        fontSize: 13,
+        color: staff.age ? '#FFFFFF' : '#777979',
         textAlign: 'center',
-        marginRight: 30
+        marginRight: 20,
+        flexShrink: 0
       }}>
-        {staff.age || '45 yr'}
+        {staff.age || '-'}
       </div>
       
       {/* Salary */}
       <div style={{ 
-        width: 100,
+        width: 90,
         fontFamily: 'Poppins',
         fontWeight: 400,
-        fontSize: 14,
-        color: '#FFFFFF',
-        textAlign: 'center',
-        marginRight: 30
+        fontSize: 13,
+        color: staff.salary ? '#FFFFFF' : '#777979',
+        textAlign: 'right',
+        marginRight: 20,
+        flexShrink: 0
       }}>
-        {staff.salary || '$2200.00'}
+        {staff.salary || '-'}
       </div>
       
       {/* Timings */}
       <div style={{ 
-        width: 120,
+        width: 100,
         fontFamily: 'Poppins',
         fontWeight: 400,
-        fontSize: 14,
-        color: '#FFFFFF',
+        fontSize: 13,
+        color: staff.timings ? '#FFFFFF' : '#777979',
         textAlign: 'center',
-        marginRight: 30
+        marginRight: 20,
+        flexShrink: 0
       }}>
-        {staff.timings || '9am to 6pm'}
+        {staff.timings || '-'}
       </div>
       
       {/* Action Buttons */}
@@ -471,61 +493,67 @@ function StaffRow({ staff, onEdit, onDelete, zebra, user }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'flex-end',
-        gap: 15,
+        gap: 18,
         marginLeft: 'auto'
       }}>
         {/* View Button - Eye Icon - Available for all users */}
-        <button onClick={() => navigate(`/staff/${encodeURIComponent(staff.id)}`)} style={{ 
+        <button 
+          onClick={() => navigate(`/staff/${encodeURIComponent(staff.dbId || staff.id)}`)} 
+          style={{ 
           background: 'transparent',
           border: 'none',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          width: 60,
-          height: 60,
+            padding: 0,
           transition: 'transform 0.2s ease'
         }}
-        onMouseEnter={(e) => e.target.style.transform = 'scale(1.1)'}
-        onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}>
-          <FiEye size={36} color="#FAC1D9" />
+          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+        >
+          <FiEye size={20} color="#FAC1D9" />
         </button>
         
         {/* Edit and Delete Buttons - Only for ADMIN users */}
         {user?.role === 'ADMIN' && (
           <>
             {/* Edit Button - Pencil Icon */}
-            <button onClick={() => onEdit(staff)} style={{ 
+            <button 
+              onClick={() => onEdit(staff)} 
+              style={{ 
               background: 'transparent',
               border: 'none',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: 60,
-              height: 60,
+                padding: 0,
               transition: 'transform 0.2s ease'
             }}
-            onMouseEnter={(e) => e.target.style.transform = 'scale(1.1)'}
-            onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}>
-              <FiEdit3 size={36} color="#FFFFFF" />
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            >
+              <FiEdit3 size={18} color="#FFFFFF" />
             </button>
             
             {/* Delete Button - Trash Can Icon */}
-            <button onClick={() => onDelete(staff.id)} style={{ 
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 60,
-              height: 60,
-              transition: 'transform 0.2s ease'
-            }}
-            onMouseEnter={(e) => e.target.style.transform = 'scale(1.1)'}
-            onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}>
-              <FiTrash2 size={36} color="#E70000" />
+            <button 
+              onClick={() => onDelete(staff)} 
+              style={{ 
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+                transition: 'transform 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            >
+              <FiTrash2 size={18} color="#E70000" />
             </button>
           </>
         )}
@@ -550,12 +578,12 @@ function AttendanceRow({ staff, attendanceStatus, onStatusChange, user }) {
       onMouseLeave={() => setIsHovered(false)}
       style={{ 
         width: '100%',
-        height: 70, 
+        minHeight: 70, 
         background: isHovered ? '#3D4142' : colors.panel, 
         display: 'flex', 
         alignItems: 'center', 
-        padding: '0 20px',
-        marginBottom: 1,
+        padding: '12px 20px',
+        marginBottom: 0,
         cursor: 'pointer',
         transition: 'background 0.2s ease'
       }}>
@@ -609,13 +637,16 @@ function AttendanceRow({ staff, attendanceStatus, onStatusChange, user }) {
           justifyContent: 'center'
         }}>
           <img 
-            src="/client img.png" 
+            src={staff.profileImage ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${staff.profileImage}` : "/client img.png"}
             alt={staff.name}
             style={{
               width: '100%',
               height: '100%',
               objectFit: 'cover',
               borderRadius: '50%'
+            }}
+            onError={(e) => {
+              e.target.src = "/client img.png";
             }}
           />
         </div>
@@ -716,7 +747,7 @@ function AttendanceRow({ staff, attendanceStatus, onStatusChange, user }) {
               {statusButtons.map((status) => (
                 <button
                   key={status.key}
-                  onClick={() => onStatusChange(staff.id, status.key)}
+                  onClick={() => onStatusChange(staff.dbId || staff.id, status.key)}
                   style={{
                     background: status.color,
                     color: status.textColor,
@@ -762,61 +793,312 @@ function AttendanceRow({ staff, attendanceStatus, onStatusChange, user }) {
 }
 
 
+// Dummy staff data for display
+const DUMMY_STAFF = [
+  {
+    id: '#101',
+    dbId: 'dummy-1',
+    name: 'Sarah Johnson',
+    role: 'MANAGER',
+    email: 'sarah.johnson@cosypos.com',
+    phone: '+1 (555) 123-4567',
+    age: '32 yr',
+    salary: '$4500.00',
+    timings: '9am to 6pm',
+    profileImage: null,
+    active: true
+  },
+  {
+    id: '#102',
+    dbId: 'dummy-2',
+    name: 'Michael Chen',
+    role: 'CHEF',
+    email: 'michael.chen@cosypos.com',
+    phone: '+1 (555) 234-5678',
+    age: '28 yr',
+    salary: '$3800.00',
+    timings: '10am to 7pm',
+    profileImage: null,
+    active: true
+  },
+  {
+    id: '#103',
+    dbId: 'dummy-3',
+    name: 'Emily Rodriguez',
+    role: 'WAITER',
+    email: 'emily.rodriguez@cosypos.com',
+    phone: '+1 (555) 345-6789',
+    age: '24 yr',
+    salary: '$2500.00',
+    timings: '11am to 8pm',
+    profileImage: null,
+    active: true
+  },
+  {
+    id: '#104',
+    dbId: 'dummy-4',
+    name: 'David Thompson',
+    role: 'CASHIER',
+    email: 'david.thompson@cosypos.com',
+    phone: '+1 (555) 456-7890',
+    age: '26 yr',
+    salary: '$2800.00',
+    timings: '9am to 6pm',
+    profileImage: null,
+    active: true
+  },
+  {
+    id: '#105',
+    dbId: 'dummy-5',
+    name: 'Jessica Martinez',
+    role: 'WAITER',
+    email: 'jessica.martinez@cosypos.com',
+    phone: '+1 (555) 567-8901',
+    age: '23 yr',
+    salary: '$2500.00',
+    timings: '12pm to 9pm',
+    profileImage: null,
+    active: true
+  },
+  {
+    id: '#106',
+    dbId: 'dummy-6',
+    name: 'James Wilson',
+    role: 'SOUS_CHEF',
+    email: 'james.wilson@cosypos.com',
+    phone: '+1 (555) 678-9012',
+    age: '30 yr',
+    salary: '$3500.00',
+    timings: '10am to 7pm',
+    profileImage: null,
+    active: true
+  },
+  {
+    id: '#107',
+    dbId: 'dummy-7',
+    name: 'Olivia Brown',
+    role: 'HOST',
+    email: 'olivia.brown@cosypos.com',
+    phone: '+1 (555) 789-0123',
+    age: '22 yr',
+    salary: '$2400.00',
+    timings: '5pm to 12am',
+    profileImage: null,
+    active: true
+  },
+  {
+    id: '#108',
+    dbId: 'dummy-8',
+    name: 'Robert Anderson',
+    role: 'BARTENDER',
+    email: 'robert.anderson@cosypos.com',
+    phone: '+1 (555) 890-1234',
+    age: '29 yr',
+    salary: '$3000.00',
+    timings: '6pm to 2am',
+    profileImage: null,
+    active: true
+  },
+  {
+    id: '#109',
+    dbId: 'dummy-9',
+    name: 'Sophia Lee',
+    role: 'WAITER',
+    email: 'sophia.lee@cosypos.com',
+    phone: '+1 (555) 901-2345',
+    age: '25 yr',
+    salary: '$2600.00',
+    timings: '11am to 8pm',
+    profileImage: null,
+    active: true
+  },
+  {
+    id: '#110',
+    dbId: 'dummy-10',
+    name: 'Daniel Garcia',
+    role: 'KITCHEN_HELPER',
+    email: 'daniel.garcia@cosypos.com',
+    phone: '+1 (555) 012-3456',
+    age: '21 yr',
+    salary: '$2200.00',
+    timings: '8am to 5pm',
+    profileImage: null,
+    active: true
+  },
+  {
+    id: '#111',
+    dbId: 'dummy-11',
+    name: 'Emma Taylor',
+    role: 'MANAGER',
+    email: 'emma.taylor@cosypos.com',
+    phone: '+1 (555) 123-4568',
+    age: '35 yr',
+    salary: '$4800.00',
+    timings: '9am to 6pm',
+    profileImage: null,
+    active: true
+  },
+  {
+    id: '#112',
+    dbId: 'dummy-12',
+    name: 'Christopher White',
+    role: 'DELIVERY_DRIVER',
+    email: 'chris.white@cosypos.com',
+    phone: '+1 (555) 234-5679',
+    age: '27 yr',
+    salary: '$2700.00',
+    timings: '10am to 7pm',
+    profileImage: null,
+    active: true
+  }
+];
+
 export default function Staff() {
   const { user } = useUser();
   const [panelOpen, setPanelOpen] = useState(false);
   const [editInitial, setEditInitial] = useState(null);
   const [activeTab, setActiveTab] = useState('management'); // 'management' or 'attendance'
-  const [attendanceStatus, setAttendanceStatus] = useState({}); // Track attendance status for each staff member
+  const [attendanceRecords, setAttendanceRecords] = useState([]); // Track attendance records from database
   const [sortBy, setSortBy] = useState('name'); // Default sort by name
   const [sortOrder, setSortOrder] = useState('asc'); // 'asc' or 'desc'
-  const [list, setList] = useState(() => [
-    { id: '#101', name: 'Watson Joyce', role: 'Manager', phone: '+1 (123) 123 4654', email: 'watsonjoyce112@gmail.com', age: '45 yr', salary: '$2200.00', timings: '9am to 6pm', active: true },
-    { id: '#102', name: 'Sarah Johnson', role: 'Staff', phone: '+1 (123) 123 4655', email: 'sarah.johnson@email.com', age: '32 yr', salary: '$1800.00', timings: '8am to 5pm', active: true },
-    { id: '#103', name: 'Mike Wilson', role: 'Chef', phone: '+1 (123) 123 4656', email: 'mike.wilson@email.com', age: '38 yr', salary: '$2500.00', timings: '10am to 7pm', active: true },
-    { id: '#104', name: 'Emily Davis', role: 'Staff', phone: '+1 (123) 123 4657', email: 'emily.davis@email.com', age: '28 yr', salary: '$1600.00', timings: '9am to 6pm', active: true },
-    { id: '#105', name: 'David Brown', role: 'Manager', phone: '+1 (123) 123 4658', email: 'david.brown@email.com', age: '42 yr', salary: '$2300.00', timings: '8am to 5pm', active: true },
-    { id: '#106', name: 'Lisa Anderson', role: 'Staff', phone: '+1 (123) 123 4659', email: 'lisa.anderson@email.com', age: '29 yr', salary: '$1700.00', timings: '9am to 6pm', active: true },
-    { id: '#107', name: 'James Taylor', role: 'Chef', phone: '+1 (123) 123 4660', email: 'james.taylor@email.com', age: '35 yr', salary: '$2400.00', timings: '11am to 8pm', active: true },
-    { id: '#108', name: 'Maria Garcia', role: 'Staff', phone: '+1 (123) 123 4661', email: 'maria.garcia@email.com', age: '31 yr', salary: '$1650.00', timings: '8am to 5pm', active: true },
-    { id: '#109', name: 'Robert Lee', role: 'Manager', phone: '+1 (123) 123 4662', email: 'robert.lee@email.com', age: '48 yr', salary: '$2600.00', timings: '9am to 6pm', active: true },
-    { id: '#110', name: 'Jennifer White', role: 'Staff', phone: '+1 (123) 123 4663', email: 'jennifer.white@email.com', age: '26 yr', salary: '$1550.00', timings: '10am to 7pm', active: true },
-    { id: '#111', name: 'Michael Clark', role: 'Chef', phone: '+1 (123) 123 4664', email: 'michael.clark@email.com', age: '41 yr', salary: '$2450.00', timings: '9am to 6pm', active: true },
-    { id: '#112', name: 'Amanda Rodriguez', role: 'Staff', phone: '+1 (123) 123 4665', email: 'amanda.rodriguez@email.com', age: '33 yr', salary: '$1750.00', timings: '8am to 5pm', active: true },
-    { id: '#113', name: 'Christopher Hall', role: 'Manager', phone: '+1 (123) 123 4666', email: 'christopher.hall@email.com', age: '39 yr', salary: '$2350.00', timings: '9am to 6pm', active: true },
-    { id: '#114', name: 'Jessica Martinez', role: 'Staff', phone: '+1 (123) 123 4667', email: 'jessica.martinez@email.com', age: '27 yr', salary: '$1600.00', timings: '10am to 7pm', active: true },
-    { id: '#115', name: 'Daniel Young', role: 'Chef', phone: '+1 (123) 123 4668', email: 'daniel.young@email.com', age: '36 yr', salary: '$2300.00', timings: '11am to 8pm', active: true },
-    { id: '#116', name: 'Ashley King', role: 'Staff', phone: '+1 (123) 123 4669', email: 'ashley.king@email.com', age: '30 yr', salary: '$1700.00', timings: '9am to 6pm', active: true },
-    { id: '#117', name: 'Matthew Wright', role: 'Manager', phone: '+1 (123) 123 4670', email: 'matthew.wright@email.com', age: '44 yr', salary: '$2500.00', timings: '8am to 5pm', active: true },
-    { id: '#118', name: 'Stephanie Lopez', role: 'Staff', phone: '+1 (123) 123 4671', email: 'stephanie.lopez@email.com', age: '28 yr', salary: '$1650.00', timings: '10am to 7pm', active: true },
-    { id: '#119', name: 'Andrew Hill', role: 'Chef', phone: '+1 (123) 123 4672', email: 'andrew.hill@email.com', age: '37 yr', salary: '$2400.00', timings: '9am to 6pm', active: true },
-    { id: '#120', name: 'Nicole Scott', role: 'Staff', phone: '+1 (123) 123 4673', email: 'nicole.scott@email.com', age: '32 yr', salary: '$1800.00', timings: '8am to 5pm', active: true },
-    { id: '#121', name: 'Kevin Green', role: 'Manager', phone: '+1 (123) 123 4674', email: 'kevin.green@email.com', age: '46 yr', salary: '$2550.00', timings: '9am to 6pm', active: true },
-    { id: '#122', name: 'Rachel Adams', role: 'Staff', phone: '+1 (123) 123 4675', email: 'rachel.adams@email.com', age: '29 yr', salary: '$1750.00', timings: '10am to 7pm', active: true },
-  ]);
+  const [list, setList] = useState(DUMMY_STAFF); // Initialize with dummy data
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, staffId: null, staffName: '' });
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  // Toast helper
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast({ show: false, message: '', type: 'success' });
+    }, 3000);
+  };
+
+  // Fetch staff data from database
+  useEffect(() => {
+    fetchStaffData();
+    if (activeTab === 'attendance') {
+      fetchAttendanceData();
+    }
+  }, [activeTab]);
+
+  const fetchStaffData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await api.get('/api/users/staff');
+      
+      // Format the data for display with sequential IDs
+      const formattedStaff = response.map((staff, index) => ({
+        id: `#${String(index + 113).padStart(3, '0')}`, // Start after dummy data
+        dbId: staff.id, // Keep original database ID for operations
+        name: staff.name || 'Unknown',
+        role: staff.role || 'STAFF',
+        email: staff.email || 'No email',
+        phone: staff.phone || '',
+        age: staff.age ? `${staff.age} yr` : '',
+        salary: staff.salary ? `$${parseFloat(staff.salary).toFixed(2)}` : '',
+        timings: staff.timings || '',
+        profileImage: staff.profileImage,
+        active: true
+      }));
+      
+      // Merge dummy data with real data
+      setList([...DUMMY_STAFF, ...formattedStaff]);
+    } catch (error) {
+      console.error('Error fetching staff:', error);
+      // Keep dummy data visible even if API fails
+      setList(DUMMY_STAFF);
+      setError(null); // Don't show error, just use dummy data
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAttendanceData = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await api.get(`/api/attendance?date=${today}`);
+      setAttendanceRecords(response);
+    } catch (error) {
+      console.error('Error fetching attendance:', error);
+    }
+  };
 
   const openAdd = () => { setEditInitial(null); setPanelOpen(true); };
   const openEdit = (s) => { setEditInitial(s); setPanelOpen(true); };
-  const onClosePanel = (updated) => {
-    if (updated) {
-      setList((prev) => {
-        const idx = prev.findIndex((p) => p.id === updated.id);
-        if (idx >= 0) {
-          const copy = prev.slice();
-          copy[idx] = updated;
-          return copy;
-        }
-        return [updated, ...prev];
-      });
-    }
+  
+  const onClosePanel = async (updated) => {
     setPanelOpen(false);
+    if (updated) {
+      // Refresh the staff list after adding or editing
+      await fetchStaffData();
+      showToast(
+        editInitial ? 'Staff member updated successfully' : 'Staff member added successfully',
+        'success'
+      );
+    }
   };
-  const onDelete = (id) => setList((prev) => prev.filter((p) => p.id !== id));
-  const handleAttendanceStatusChange = (staffId, status) => {
-    setAttendanceStatus(prev => ({
-      ...prev,
-      [staffId]: status
-    }));
+  
+  const onDelete = (staff) => {
+    setDeleteConfirm({
+      show: true,
+      staffId: staff.dbId || staff.id,
+      staffName: staff.name
+    });
+  };
+  
+  const confirmDelete = async () => {
+    const { staffId, staffName } = deleteConfirm;
+    setDeleteConfirm({ show: false, staffId: null, staffName: '' });
+    
+    // Check if this is a dummy staff member
+    if (staffId.startsWith('dummy-')) {
+      // Just remove from local state for dummy data
+      setList((prev) => prev.filter((p) => p.dbId !== staffId));
+      showToast(`${staffName} has been removed`, 'success');
+      return;
+    }
+    
+    try {
+      await api.delete(`/api/users/${staffId}`);
+      // Remove from local state immediately for better UX
+      setList((prev) => prev.filter((p) => p.dbId !== staffId));
+      showToast(`${staffName} has been deleted successfully`, 'success');
+    } catch (error) {
+      console.error('Error deleting staff:', error);
+      showToast('Failed to delete staff member. Please try again.', 'error');
+    }
+  };
+  
+  const cancelDelete = () => {
+    setDeleteConfirm({ show: false, staffId: null, staffName: '' });
+  };
+  
+  const handleAttendanceStatusChange = async (staffDbId, status) => {
+    try {
+      // Map status to backend enum values
+      const statusMap = {
+        'present': 'PRESENT',
+        'absent': 'ABSENT',
+        'half': 'HALF_SHIFT',
+        'leave': 'LEAVE'
+      };
+
+      await api.post('/api/attendance', {
+        userId: staffDbId,
+        status: statusMap[status],
+        date: new Date().toISOString()
+      });
+      
+      // Refresh attendance data
+      await fetchAttendanceData();
+      showToast('Attendance updated successfully', 'success');
+    } catch (error) {
+      console.error('Error updating attendance:', error);
+      showToast('Failed to update attendance. Please try again.', 'error');
+    }
   };
 
   const handleSort = (field) => {
@@ -877,13 +1159,51 @@ export default function Staff() {
     <StaffRow key={s.id} staff={s} onEdit={openEdit} onDelete={onDelete} zebra={i % 2 === 1} user={user} />
   )), [sortedList, user]);
 
+  // Helper to get attendance status for a staff member
+  const getAttendanceStatus = (staffDbId) => {
+    const record = attendanceRecords.find(rec => rec.userId === staffDbId);
+    if (!record) return null;
+    
+    // Map backend status to frontend status
+    const statusMap = {
+      'PRESENT': 'present',
+      'ABSENT': 'absent',
+      'HALF_SHIFT': 'half',
+      'LEAVE': 'leave'
+    };
+    
+    return statusMap[record.status] || null;
+  };
+
   return (
-    <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text }}>
-      <div style={{ width: 1440, margin: '0 auto', position: 'relative' }}>
+    <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text, overflowX: 'hidden' }}>
+      <div style={{ width: '100%', maxWidth: '100vw', margin: '0 auto', position: 'relative' }}>
         <Sidebar />
         <Header onAdd={openAdd} count={list.length} activeTab={activeTab} setActiveTab={setActiveTab} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} user={user} />
-        <main style={{ paddingTop: 20, paddingBottom: 40, marginLeft: 176 }}>
-          {activeTab === 'management' ? (
+        <main className="page-main-content" style={{ paddingTop: 20, paddingBottom: 40 }}>
+          {loading ? (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              minHeight: 400,
+              fontSize: 18,
+              color: colors.muted 
+            }}>
+              Loading staff data...
+            </div>
+          ) : error ? (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              minHeight: 400,
+              fontSize: 18,
+              color: '#E70000' 
+            }}>
+              {error}
+            </div>
+          ) : activeTab === 'management' ? (
             <>
               {/* Column Headers */}
               <div style={{ 
@@ -982,7 +1302,9 @@ export default function Staff() {
                    fontSize: 14,
                    color: '#FFFFFF',
                    marginLeft: 'auto',
-                   paddingLeft: 5
+                  minWidth: 140,
+                  textAlign: 'right',
+                  paddingRight: 20
                  }}>Actions</div>
               </div>
               
@@ -1048,9 +1370,9 @@ export default function Staff() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                 {list.map((staff, i) => (
                   <AttendanceRow 
-                    key={staff.id} 
+                    key={staff.dbId || staff.id} 
                     staff={staff} 
-                    attendanceStatus={attendanceStatus[staff.id]}
+                    attendanceStatus={getAttendanceStatus(staff.dbId || staff.id)}
                     onStatusChange={handleAttendanceStatusChange}
                     zebra={i % 2 === 1}
                     user={user}
@@ -1061,7 +1383,98 @@ export default function Staff() {
           )}
         </main>
       </div>
+      
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm.show && (
+        <div style={{ 
+          position: 'fixed', 
+          inset: 0, 
+          background: 'rgba(0,0,0,0.8)', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          zIndex: 2000,
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{ 
+            background: colors.panel, 
+            borderRadius: 16, 
+            padding: 32,
+            maxWidth: 440,
+            width: '90%',
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)'
+          }}>
+            <div style={{ 
+              fontSize: 22, 
+              fontWeight: 600, 
+              marginBottom: 12,
+              color: colors.text
+            }}>
+              Delete Staff Member
+            </div>
+            <div style={{ 
+              fontSize: 14, 
+              color: colors.muted, 
+              marginBottom: 24,
+              lineHeight: 1.6
+            }}>
+              Are you sure you want to delete <strong style={{ color: colors.text }}>{deleteConfirm.staffName}</strong>? This action cannot be undone.
+            </div>
+            <div style={{ 
+              display: 'flex', 
+              gap: 12, 
+              justifyContent: 'flex-end' 
+            }}>
+              <button 
+                onClick={cancelDelete}
+                style={{ 
+                  padding: '12px 24px', 
+                  borderRadius: 8, 
+                  background: colors.inputBg, 
+                  border: 'none', 
+                  color: colors.text, 
+                  fontSize: 14, 
+                  fontWeight: 500, 
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.target.style.background = '#4A4F50'}
+                onMouseLeave={(e) => e.target.style.background = colors.inputBg}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmDelete}
+                style={{ 
+                  padding: '12px 24px', 
+                  borderRadius: 8, 
+                  background: '#E70000', 
+                  border: 'none', 
+                  color: '#FFFFFF', 
+                  fontSize: 14, 
+                  fontWeight: 600, 
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.target.style.background = '#C50000'}
+                onMouseLeave={(e) => e.target.style.background = '#E70000'}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <AddEditPanel open={panelOpen} onClose={onClosePanel} initial={editInitial} />
+      
+      {/* Toast Notification */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ show: false, message: '', type: 'success' })}
+      />
     </div>
   );
 }

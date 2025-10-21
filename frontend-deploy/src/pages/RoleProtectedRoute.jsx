@@ -10,22 +10,45 @@ export default function RoleProtectedRoute({ children, allowedRoles = [] }) {
   const location = useLocation();
 
   useEffect(() => {
+    let mounted = true;
+    let timeoutId;
+
     const token = localStorage.getItem('token');
     if (!token) {
       setLoading(false);
       return;
     }
 
+    // Safety timeout - if auth check takes too long, fail gracefully
+    timeoutId = setTimeout(() => {
+      if (mounted) {
+        console.warn('⚠️ Auth check timeout - redirecting to login');
+        setError('Authentication timeout');
+        setLoading(false);
+      }
+    }, 15000); // 15 second timeout for auth
+
     getCurrentUser()
       .then(response => {
-        setUser(response.user);
-        setLoading(false);
+        if (mounted) {
+          clearTimeout(timeoutId);
+          setUser(response.user);
+          setLoading(false);
+        }
       })
       .catch(err => {
-        console.error('Failed to get user info:', err);
-        setError(err.message);
-        setLoading(false);
+        if (mounted) {
+          clearTimeout(timeoutId);
+          console.error('Failed to get user info:', err);
+          setError(err.message);
+          setLoading(false);
+        }
       });
+
+    return () => {
+      mounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, []);
 
   if (loading) {

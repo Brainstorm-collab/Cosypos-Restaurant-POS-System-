@@ -75,100 +75,104 @@ export const WebVitalsMonitor = () => {
   return null;
 };
 
-// Memory usage monitoring (Chromium-only)
+// Memory usage monitoring (Chromium-only) - Optimized
 export const MemoryMonitor = ({ 
   enabled = process.env.NODE_ENV === 'development',
-  interval = 30000 
+  interval = 60000, // Increased to 1 minute to reduce overhead
+  logThreshold = 0.8 // Only log when memory usage is high
 } = {}) => {
   useEffect(() => {
     // Feature detection for performance.memory (Chromium-only)
     if (!performance.memory) {
-      console.warn('performance.memory API not available (Chromium-only feature)');
-      return;
+      return; // Silently return if not available
     }
 
     if (!enabled) {
       return;
     }
 
+    let lastLoggedTime = 0;
+    const minLogInterval = 30000; // Minimum 30 seconds between logs
+
     const logMemoryUsage = () => {
+      const now = Date.now();
       const memory = performance.memory;
       const used = Math.round(memory.usedJSHeapSize / 1048576);
       const total = Math.round(memory.totalJSHeapSize / 1048576);
       const limit = Math.round(memory.jsHeapSizeLimit / 1048576);
+      const usageRatio = used / limit;
       
-      console.log(`🧠 Memory: ${used}MB / ${total}MB (limit: ${limit}MB)`);
-      
-      // Warn if memory usage is high
-      if (used / limit > 0.8) {
-        console.warn('⚠️ High memory usage detected!');
+      // Only log if memory usage is high or enough time has passed
+      if (usageRatio > logThreshold || (now - lastLoggedTime) > minLogInterval) {
+        console.log(`🧠 Memory: ${used}MB / ${total}MB (limit: ${limit}MB)`);
+        lastLoggedTime = now;
+        
+        // Warn if memory usage is high
+        if (usageRatio > 0.9) {
+          console.warn('⚠️ High memory usage detected!');
+        }
       }
     };
 
     // Log memory usage at specified interval
     const intervalId = setInterval(logMemoryUsage, interval);
-    
-    // Initial log
-    logMemoryUsage();
 
     return () => clearInterval(intervalId);
-  }, [enabled, interval]);
+  }, [enabled, interval, logThreshold]);
 
   return null;
 };
 
-// Bundle size monitoring
-export const BundleSizeMonitor = () => {
+// Bundle size monitoring - Optimized
+export const BundleSizeMonitor = ({ 
+  enabled = process.env.NODE_ENV === 'development',
+  slowThreshold = 2000, // Increased threshold to 2 seconds
+  largeThreshold = 1000000 // Increased to 1MB
+} = {}) => {
   useEffect(() => {
     // Check if PerformanceObserver is supported
     if (typeof PerformanceObserver === 'undefined') {
-      console.warn('PerformanceObserver not supported in this browser');
-      return;
+      return; // Silently return if not supported
     }
 
     // Check if resource entry type is supported
     const supportedEntryTypes = PerformanceObserver.supportedEntryTypes || [];
     if (!supportedEntryTypes.includes('resource')) {
-      console.warn('Resource entry type not supported for bundle monitoring');
+      return; // Silently return if not supported
+    }
+
+    if (!enabled) {
       return;
     }
 
     let observer;
-    try {
-      // Process existing resources before starting observer
-      const existingResources = performance.getEntriesByType('resource');
-      for (const entry of existingResources) {
-        const loadTime = entry.responseEnd - entry.startTime;
-        const size = entry.transferSize;
-        
-        // Log slow resources
-        if (loadTime > 1000) {
-          const sizeKB = size ? Math.round(size/1024) : 'unknown';
-          console.warn(`🐌 Slow resource: ${entry.name} took ${loadTime.toFixed(2)}ms (${sizeKB}KB)`);
-        }
-        
-        // Log large resources
-        if (size && size > 500000) { // 500KB
-          console.warn(`📦 Large resource: ${entry.name} is ${Math.round(size/1024)}KB`);
-        }
-      }
+    const loggedResources = new Set(); // Track logged resources to avoid duplicates
 
+    try {
       // Monitor resource loading times
       observer = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
           if (entry.entryType === 'resource') {
             const loadTime = entry.responseEnd - entry.startTime;
             const size = entry.transferSize;
+            const resourceKey = `${entry.name}-${entry.startTime}`;
             
-            // Log slow resources
-            if (loadTime > 1000) {
+            // Skip if already logged
+            if (loggedResources.has(resourceKey)) {
+              continue;
+            }
+            
+            // Log slow resources (only in development)
+            if (loadTime > slowThreshold) {
               const sizeKB = size ? Math.round(size/1024) : 'unknown';
               console.warn(`🐌 Slow resource: ${entry.name} took ${loadTime.toFixed(2)}ms (${sizeKB}KB)`);
+              loggedResources.add(resourceKey);
             }
             
             // Log large resources
-            if (size && size > 500000) { // 500KB
+            if (size && size > largeThreshold) {
               console.warn(`📦 Large resource: ${entry.name} is ${Math.round(size/1024)}KB`);
+              loggedResources.add(resourceKey);
             }
           }
         }
@@ -176,6 +180,7 @@ export const BundleSizeMonitor = () => {
 
       observer.observe({ entryTypes: ['resource'] });
     } catch (error) {
+      // Silently handle errors
       console.warn('BundleSizeMonitor: Performance monitoring not supported', error);
     }
 
@@ -184,17 +189,23 @@ export const BundleSizeMonitor = () => {
         observer.disconnect();
       }
     };
-  }, []);
+  }, [enabled, slowThreshold, largeThreshold]);
 
   return null;
 };
-// Combined performance monitor
-export const PerformanceDashboard = () => {
+// Combined performance monitor - Optimized
+export const PerformanceDashboard = ({ 
+  enabled = process.env.NODE_ENV === 'development' 
+} = {}) => {
+  if (!enabled) {
+    return null;
+  }
+
   return (
     <>
       <WebVitalsMonitor />
-      <MemoryMonitor />
-      <BundleSizeMonitor />
+      <MemoryMonitor enabled={enabled} />
+      <BundleSizeMonitor enabled={enabled} />
     </>
   );
 };

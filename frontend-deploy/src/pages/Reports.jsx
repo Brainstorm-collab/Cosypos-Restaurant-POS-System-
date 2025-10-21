@@ -165,8 +165,8 @@ export default function Reports() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text }}>
-      <div style={{ width: 1440, margin: '0 auto', position: 'relative' }}>
+    <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text, overflowX: 'hidden' }}>
+      <div style={{ width: '100%', maxWidth: '100vw', margin: '0 auto', position: 'relative' }}>
         <Sidebar />
         <HeaderBar title="Reports" showBackButton={true} right={(
           <>
@@ -276,7 +276,7 @@ export default function Reports() {
               }}
             >
               <img 
-                src={user?.profileImage ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${user.profileImage}` : "/profile img icon.jpg"} 
+                src={user?.profileImage ? (import.meta.env.DEV ? user.profileImage : `${import.meta.env.VITE_API_URL}${user.profileImage}`) : "/profile img icon.jpg"} 
                 alt="Profile" 
                 style={{ 
                   width: '100%',

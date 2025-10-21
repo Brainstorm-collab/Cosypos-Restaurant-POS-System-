@@ -77,13 +77,13 @@ export default function StaffDetail() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text }}>
-      <div style={{ width: 1440, margin: '0 auto', position: 'relative' }}>
+    <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text, overflowX: 'hidden' }}>
+      <div style={{ width: '100%', maxWidth: '100vw', margin: '0 auto', position: 'relative' }}>
         <Sidebar />
         
         {/* Custom Header */}
-        <div style={{ 
-          marginLeft: 208,
+        <div className="page-main-content" style={{ 
+          marginLeft: 0,
           paddingLeft: 20,
           paddingRight: 12, 
           paddingTop: 40, 
@@ -255,8 +255,8 @@ export default function StaffDetail() {
           </div>
         </div>
         
-        <main style={{ paddingLeft: 208, paddingRight: 32, paddingTop: 20, paddingBottom: 32 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 24 }}>
+        <main className="page-main-content" style={{ paddingTop: 20, paddingBottom: 32 }}>
+          <div className="grid-1-col-mobile-2-desktop" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
             
             {/* Left Column - Profile Image */}
             <div style={{ 

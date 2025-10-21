@@ -4,6 +4,7 @@ import { useUser } from './UserContext';
 import Sidebar from './Sidebar.jsx';
 import HeaderBar from './HeaderBar.jsx';
 import RoleDetails from './RoleDetails.jsx';
+import SessionRefreshBanner from '../components/SessionRefreshBanner.jsx';
 
 const colors = {
   bg: '#111315',
@@ -56,8 +57,11 @@ export default function Layout({ children, title, showBackButton = false, right 
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text }}>
-      <div style={{ width: 1440, margin: '0 auto', position: 'relative' }}>
+    <div style={{ minHeight: '100vh', background: colors.bg, color: colors.text, overflowX: 'hidden' }}>
+      {/* Session Refresh Banner */}
+      <SessionRefreshBanner />
+      
+      <div style={{ width: '100%', maxWidth: '100vw', margin: '0 auto', position: 'relative' }}>
         {/* Sidebar */}
         <Sidebar />
 
@@ -76,7 +80,23 @@ export default function Layout({ children, title, showBackButton = false, right 
         />
 
         {/* Content */}
-        <main style={{ paddingLeft: 208, paddingRight: 32, paddingTop: 100, paddingBottom: 32 }}>
+        <main className="main-content" style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 80, paddingBottom: 24 }}>
+          <style>{`
+            @media (min-width: 768px) {
+              .main-content {
+                padding-left: 24px !important;
+                padding-right: 24px !important;
+              }
+            }
+            @media (min-width: 1024px) {
+              .main-content {
+                padding-left: 208px !important;
+                padding-right: 32px !important;
+                padding-top: 100px !important;
+                padding-bottom: 32px !important;
+              }
+            }
+          `}</style>
           {children}
         </main>
 

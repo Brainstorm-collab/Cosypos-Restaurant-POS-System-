@@ -1,9 +1,10 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { getCurrentUser } from '../utils/api'
+import performanceAPI from '../utils/performanceApi'
 
 const UserContext = createContext()
 
-export const useUser = () => {
+const useUser = () => {
   const context = useContext(UserContext)
   if (!context) {
     throw new Error('useUser must be used within a UserProvider')
@@ -15,10 +16,10 @@ export const UserProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  const loadUser = async () => {
+  const loadUser = useCallback(async () => {
     try {
       setLoading(true)
-      const response = await getCurrentUser()
+      const response = await performanceAPI.getCurrentUserOptimized()
       setUser(response.user)
     } catch (error) {
       console.error('Failed to load user:', error)
@@ -26,16 +27,16 @@ export const UserProvider = ({ children }) => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  const updateUser = (updatedUser) => {
+  const updateUser = useCallback((updatedUser) => {
     setUser(updatedUser)
-  }
+  }, [])
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setUser(null)
     localStorage.removeItem('token')
-  }
+  }, [])
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -44,15 +45,15 @@ export const UserProvider = ({ children }) => {
     } else {
       setLoading(false)
     }
-  }, [])
+  }, [loadUser])
 
-  const value = {
+  const value = useMemo(() => ({
     user,
     loading,
     loadUser,
     updateUser,
     logout
-  }
+  }), [user, loading, loadUser, updateUser, logout])
 
   return (
     <UserContext.Provider value={value}>
@@ -60,3 +61,5 @@ export const UserProvider = ({ children }) => {
     </UserContext.Provider>
   )
 }
+
+export { useUser }

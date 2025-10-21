@@ -5,23 +5,37 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
+    // Enable HMR optimization
+    hmr: {
+      overlay: false // Disable error overlay for better performance
+    },
+    // Enable faster file watching
+    watch: {
+      usePolling: false,
+      interval: 100
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:4000',
         changeOrigin: true,
-      },
-      '/uploads': {
-        target: 'http://localhost:4000',
-        changeOrigin: true,
+        // Add timeout and keep-alive for better performance
+        timeout: 10000,
+        proxyTimeout: 10000,
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
             console.log('proxy error', err);
           });
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            console.log('Sending Request to the Target:', req.method, req.url);
-          });
-          proxy.on('proxyRes', (proxyRes, req, _res) => {
-            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+        },
+      },
+      '/uploads': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        // Optimize upload proxy
+        timeout: 30000,
+        proxyTimeout: 30000,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('proxy error', err);
           });
         },
       }
@@ -34,9 +48,12 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom'],
           router: ['react-router-dom'],
-          icons: ['lucide-react', 'react-icons'],
-          charts: ['recharts']
-        }
+          icons: ['lucide-react', 'react-icons']
+        },
+        // Optimize chunk naming
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
       }
     },
     // Enable compression
@@ -44,13 +61,24 @@ export default defineConfig({
     terserOptions: {
       compress: {
         pure_funcs: ['console.log', 'console.debug', 'console.info'],
-        drop_debugger: true
+        drop_debugger: true,
+        drop_console: true // Remove console logs in production
       }
-    },    // Optimize chunk size
-    chunkSizeWarningLimit: 1000
+    },
+    // Optimize chunk size
+    chunkSizeWarningLimit: 1000,
+    // Enable source maps for debugging
+    sourcemap: false // Disable in production for better performance
   },
   // Enable pre-bundling for faster dev
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom', 'lucide-react', 'react-icons', 'recharts']
+    include: ['react', 'react-dom', 'react-router-dom', 'lucide-react', 'react-icons', 'recharts'],
+    // Force pre-bundling of common dependencies
+    force: true
+  },
+  // Performance optimizations
+  esbuild: {
+    // Remove console logs in production
+    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : []
   }
 })

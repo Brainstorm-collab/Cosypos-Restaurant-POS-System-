@@ -1,36 +1,55 @@
 const express = require('express');
 const { prisma } = require('../lib/prisma');
 const { requireAnyAuth } = require('../middleware/auth');
+const cache = require('../cache');
+const etagMiddleware = require('../middleware/etag-cache');
+const deduplicator = require('../request-deduplicator');
 const router = express.Router();
 
 // Category Management Routes
 
 // Get all categories
-router.get('/categories', async (req, res) => {
+router.get('/categories', etagMiddleware, async (req, res) => {
   try {
-    const categories = await prisma.menuCategory.findMany({
-      include: {
-        items: {
-          select: {
-            id: true,
-            name: true,
-            available: true
+    // Check cache first
+    const cacheKey = 'categories:all';
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      console.log('🚀 CACHE HIT! Returning cached categories (instant)');
+      return res.json(cached);
+    }
+
+    console.log('💾 CACHE MISS - Fetching categories from PostgreSQL (optimized query)...');
+    
+    // Use deduplication to prevent stampeding herd
+    const categories = await deduplicator.deduplicate(cacheKey, async () => {
+      const startTime = Date.now();
+      const data = await prisma.menuCategory.findMany({
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          items: {
+            select: {
+              id: true,
+              name: true,
+              available: true
+            }
           }
-        }
-      },
-      orderBy: { name: 'asc' }
+        },
+        orderBy: { name: 'asc' }
+      });
+      console.log(`⚡ Query took ${Date.now() - startTime}ms`);
+      return data;
     });
     
-    // Cache static menu data for 5 minutes with ETag for conditional requests
-    const crypto = require('crypto');
-    const etag = `"${crypto.createHash('md5').update(JSON.stringify(categories)).digest('hex')}"`;
-    res.set('Cache-Control', 'public, max-age=300');
-    res.set('ETag', etag);
+    // Cache for 5 MINUTES (increased from 30 seconds for better performance)
+    cache.set(cacheKey, categories, 300000);
+    console.log('✅ Stored categories in cache for 5 minutes');
     
-    // Check if client has cached version
-    if (req.headers['if-none-match'] === etag) {
-      return res.status(304).end();
-    }    
+    // Allow some caching on client side (5 seconds)
+    res.set('Cache-Control', 'public, max-age=5');
+    
     res.json(categories);
   } catch (error) {
     console.error('Error fetching categories:', error);
@@ -57,8 +76,9 @@ router.post('/categories', requireAnyAuth(), async (req, res) => {
       }
     });
     
-    // Clear cache for category mutations
-    res.set('Clear-Site-Data', 'cache');
+    // Clear cache when data changes
+    cache.clearPattern('categories:');
+    
     res.status(201).json(category);
   } catch (error) {
     console.error('Error creating category:', error);
@@ -87,8 +107,10 @@ router.put('/categories/:id', requireAnyAuth(), async (req, res) => {
       }
     });
     
-    // Clear cache for category mutations
-    res.set('Clear-Site-Data', 'cache');
+    // Clear cache when data changes
+    cache.clearPattern('categories:');
+    cache.clearPattern('menu-items:');
+    
     res.json(category);
   } catch (error) {
     console.error('Error updating category:', error);
@@ -106,29 +128,69 @@ router.put('/categories/:id', requireAnyAuth(), async (req, res) => {
 router.delete('/categories/:id', requireAnyAuth(), async (req, res) => {
   try {
     const { id } = req.params;
+    const { force } = req.query; // ?force=true to cascade delete
     
     // Check if category has items
     const categoryWithItems = await prisma.menuCategory.findUnique({
       where: { id },
-      include: { items: true }
+      include: { 
+        items: {
+          select: {
+            id: true,
+            name: true,
+            priceCents: true
+          }
+        }
+      }
     });
     
     if (!categoryWithItems) {
       return res.status(404).json({ error: 'Category not found' });
     }
     
-    if (categoryWithItems.items.length > 0) {
+    // If category has items and force delete is not requested
+    if (categoryWithItems.items.length > 0 && force !== 'true') {
       return res.status(400).json({ 
-        error: 'Cannot delete category with existing menu items' 
+        error: 'Cannot delete category with existing menu items',
+        details: {
+          categoryName: categoryWithItems.name,
+          itemCount: categoryWithItems.items.length,
+          items: categoryWithItems.items.map(item => ({
+            id: item.id,
+            name: item.name,
+            price: `$${(item.priceCents / 100).toFixed(2)}`
+          }))
+        }
       });
-    }    
+    }
+    
+    // If force delete is requested, delete all items first
+    if (force === 'true' && categoryWithItems.items.length > 0) {
+      console.log(`🗑️ Cascade deleting ${categoryWithItems.items.length} items from category: ${categoryWithItems.name}`);
+      
+      // Delete all menu items in this category
+      await prisma.menuItem.deleteMany({
+        where: { categoryId: id }
+      });
+      
+      console.log(`✅ Deleted ${categoryWithItems.items.length} menu items`);
+    }
+    
+    // Now delete the category
     await prisma.menuCategory.delete({
       where: { id }
     });
     
-    // Clear cache for category mutations
-    res.set('Clear-Site-Data', 'cache');
-    res.json({ message: 'Category deleted successfully' });
+    // Clear cache when data changes
+    cache.clearPattern('categories:');
+    cache.clearPattern('menu-items:');
+    
+    console.log(`✅ Category deleted: ${categoryWithItems.name}`);
+    
+    res.json({ 
+      message: 'Category deleted successfully',
+      deletedItems: force === 'true' ? categoryWithItems.items.length : 0
+    });
   } catch (error) {
     console.error('Error deleting category:', error);
     if (error.code === 'P2025') {
@@ -140,13 +202,41 @@ router.delete('/categories/:id', requireAnyAuth(), async (req, res) => {
 });
 
 // Get all menu items
-router.get('/menu-items', async (req, res) => {
+router.get('/menu-items', etagMiddleware, async (req, res) => {
   try {
-    const menuItems = await prisma.menuItem.findMany({
-      include: {
-        category: true
-      },
-      orderBy: { name: 'asc' }
+    // Check cache first
+    const cacheKey = 'menu-items:all';
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      console.log('🚀 CACHE HIT! Returning cached menu items (instant)');
+      return res.json(cached);
+    }
+
+    console.log('💾 CACHE MISS - Fetching from PostgreSQL (optimized query)...');
+    
+    // Use deduplication to prevent stampeding herd
+    const menuItems = await deduplicator.deduplicate(cacheKey, async () => {
+      const startTime = Date.now();
+      const data = await prisma.menuItem.findMany({
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          priceCents: true,
+          categoryId: true,
+          stock: true,
+          available: true,
+          image: true,
+          category: {
+            select: {
+              name: true
+            }
+          }
+        },
+        orderBy: { name: 'asc' }
+      });
+      console.log(`⚡ PostgreSQL query took ${Date.now() - startTime}ms`);
+      return data;
     });
     
     // Transform data to match frontend expectations
@@ -157,22 +247,20 @@ router.get('/menu-items', async (req, res) => {
       priceCents: item.priceCents,
       price: `$${(item.priceCents / 100).toFixed(2)}`,
       category: { name: item.category.name },
+      categoryId: item.categoryId,
       stock: item.stock,
+      available: item.available,
       availability: item.available ? 'In Stock' : 'Out of Stock',
       image: item.image || '/default-food.png',
       active: item.available
     }));
     
-    // Cache static menu data for 5 minutes with ETag for conditional requests
-    const crypto = require('crypto');
-    const etag = `"${crypto.createHash('md5').update(JSON.stringify(transformedItems)).digest('hex')}"`;
-    res.set('Cache-Control', 'public, max-age=300');
-    res.set('ETag', etag);
+    // Cache for 5 MINUTES (increased from 30 seconds for better performance)
+    cache.set(cacheKey, transformedItems, 300000);
+    console.log('✅ Stored in cache for 5 minutes');
     
-    // Check if client has cached version
-    if (req.headers['if-none-match'] === etag) {
-      return res.status(304).end();
-    }
+    // Allow some caching on client side (5 seconds)
+    res.set('Cache-Control', 'public, max-age=5');
     
     res.json(transformedItems);
   } catch (error) {
@@ -253,6 +341,10 @@ router.post('/menu-items', requireAnyAuth(), async (req, res) => {
       }
     });
     
+    // Clear cache when data changes
+    cache.clearPattern('menu-items:');
+    cache.clearPattern('categories:');
+    
     // Transform response
     const transformedItem = {
       id: menuItem.id,
@@ -267,8 +359,6 @@ router.post('/menu-items', requireAnyAuth(), async (req, res) => {
       active: menuItem.available
     };
     
-    // Clear cache for menu item mutations
-    res.set('Clear-Site-Data', 'cache');
     res.status(201).json(transformedItem);
   } catch (error) {
     console.error('Error creating menu item:', error);
@@ -282,6 +372,14 @@ router.put('/menu-items/:id', requireAnyAuth(), async (req, res) => {
     const { id } = req.params;
     const { name, description, price, category, stock, availability, image } = req.body;
     
+    console.log('📝 Update menu item request:', { id, name, price, category, stock, availability });
+    
+    // Validate category is a string
+    if (category && typeof category !== 'string') {
+      console.error('❌ Invalid category type:', typeof category, category);
+      return res.status(400).json({ error: 'Category must be a string' });
+    }
+    
     // Find or create category if provided
     let categoryId = null;
     if (category) {
@@ -290,6 +388,7 @@ router.put('/menu-items/:id', requireAnyAuth(), async (req, res) => {
       });
       
       if (!categoryRecord) {
+        console.log('📁 Creating new category:', category);
         categoryRecord = await prisma.menuCategory.create({
           data: { name: category }
         });
@@ -306,6 +405,15 @@ router.put('/menu-items/:id', requireAnyAuth(), async (req, res) => {
     if (image !== undefined) updateData.image = image;
     if (categoryId) updateData.categoryId = categoryId;
     
+    // Check if menu item exists first
+    const existingItem = await prisma.menuItem.findUnique({
+      where: { id }
+    });
+    
+    if (!existingItem) {
+      return res.status(404).json({ error: 'Menu item not found' });
+    }
+    
     const menuItem = await prisma.menuItem.update({
       where: { id },
       data: updateData,
@@ -313,6 +421,10 @@ router.put('/menu-items/:id', requireAnyAuth(), async (req, res) => {
         category: true
       }
     });
+    
+    // Clear cache when data changes
+    cache.clearPattern('menu-items:');
+    cache.clearPattern('categories:');
     
     // Transform response
     const transformedItem = {
@@ -328,15 +440,19 @@ router.put('/menu-items/:id', requireAnyAuth(), async (req, res) => {
       active: menuItem.available
     };
     
-    // Clear cache for menu item mutations
-    res.set('Clear-Site-Data', 'cache');
+    console.log('✅ Menu item updated successfully:', transformedItem.id);
     res.json(transformedItem);
   } catch (error) {
-    console.error('Error updating menu item:', error);
+    console.error('❌ Error updating menu item:', error);
+    console.error('Error details:', {
+      code: error.code,
+      message: error.message,
+      meta: error.meta
+    });
     if (error.code === 'P2025') {
       res.status(404).json({ error: 'Menu item not found' });
     } else {
-      res.status(500).json({ error: 'Failed to update menu item' });
+      res.status(500).json({ error: `Failed to update menu item: ${error.message}` });
     }
   }
 });
@@ -350,8 +466,10 @@ router.delete('/menu-items/:id', requireAnyAuth(), async (req, res) => {
       where: { id }
     });
     
-    // Clear cache for menu item mutations
-    res.set('Clear-Site-Data', 'cache');
+    // Clear cache when data changes
+    cache.clearPattern('menu-items:');
+    cache.clearPattern('categories:');
+    
     res.json({ message: 'Menu item deleted successfully' });
   } catch (error) {
     console.error('Error deleting menu item:', error);

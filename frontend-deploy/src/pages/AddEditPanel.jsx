@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import api from '../utils/apiClient'
 
 const colors = {
   panel: '#292C2D',
@@ -11,18 +12,73 @@ const colors = {
 
 function AddEditPanel({ open, onClose, initial }) {
   const isEdit = Boolean(initial);
-  const [name, setName] = useState(initial?.name || '');
-  const [email, setEmail] = useState(initial?.email || '');
-  const [phone, setPhone] = useState(initial?.phone || '');
-  const [role, setRole] = useState(initial?.role || '');
-  const [salary, setSalary] = useState(initial?.salary || '');
-  const [startTiming, setStartTiming] = useState(initial?.startTiming || '');
-  const [endTiming, setEndTiming] = useState(initial?.endTiming || '');
-  const [address, setAddress] = useState(initial?.address || '');
-  const [dateOfBirth, setDateOfBirth] = useState(initial?.dateOfBirth || '');
-  const [additionalDetails, setAdditionalDetails] = useState(initial?.additionalDetails || '');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [role, setRole] = useState('');
+  const [salary, setSalary] = useState('');
+  const [startTiming, setStartTiming] = useState('');
+  const [endTiming, setEndTiming] = useState('');
+  const [address, setAddress] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [additionalDetails, setAdditionalDetails] = useState('');
   const [profileImage, setProfileImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState(initial?.profileImage || null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Reset form when initial data changes
+  useEffect(() => {
+    if (initial) {
+      setName(initial.name || '');
+      setEmail(initial.email || '');
+      setPhone(initial.phone?.replace('N/A', '') || '');
+      setRole(initial.role || '');
+      // Parse salary from "$X.XX" format
+      const salaryValue = initial.salary?.replace(/[\$,]/g, '').replace('N/A', '') || '';
+      setSalary(salaryValue);
+      
+      // Parse timings from "Xam to Ypm" format
+      const timings = initial.timings?.replace('N/A', '') || '';
+      if (timings && timings.includes(' to ')) {
+        const [start, end] = timings.split(' to ');
+        setStartTiming(start.trim());
+        setEndTiming(end.trim());
+      } else {
+        setStartTiming('');
+        setEndTiming('');
+      }
+      
+      // Calculate date of birth from age
+      if (initial.age && initial.age !== 'N/A') {
+        const ageNum = parseInt(initial.age);
+        if (!isNaN(ageNum)) {
+          const birthYear = new Date().getFullYear() - ageNum;
+          setDateOfBirth(`${birthYear}-01-01`);
+        }
+      } else {
+        setDateOfBirth('');
+      }
+      
+      setImagePreview(initial.profileImage || null);
+    } else {
+      // Reset all fields for new entry
+      setName('');
+      setEmail('');
+      setPassword('');
+      setPhone('');
+      setRole('');
+      setSalary('');
+      setStartTiming('');
+      setEndTiming('');
+      setAddress('');
+      setDateOfBirth('');
+      setAdditionalDetails('');
+      setImagePreview(null);
+    }
+    setError(null);
+  }, [initial]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -47,23 +103,98 @@ function AddEditPanel({ open, onClose, initial }) {
     };
   }, [open]);
 
-  const handleSubmit = (e) => {
+  const calculateAge = (dob) => {
+    if (!dob) return null;
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Placeholder: wire to backend later
-    onClose({ 
-      id: initial?.id || Math.random().toString(36).slice(2), 
-      name, 
-      email, 
-      phone, 
-      role, 
-      salary,
-      startTiming,
-      endTiming,
-      address,
-      dateOfBirth,
-      additionalDetails,
-      profileImage
-    });
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Validate required fields
+      if (!name || !email) {
+        throw new Error('Name and email are required');
+      }
+
+      if (!isEdit && !password) {
+        throw new Error('Password is required for new staff members');
+      }
+
+      // Prepare staff data
+      const timings = (startTiming && endTiming) ? `${startTiming} to ${endTiming}` : null;
+      const age = calculateAge(dateOfBirth);
+
+      const staffData = {
+        name,
+        email,
+        phone: phone || null,
+        role: role || 'STAFF',
+        salary: salary ? parseFloat(salary) : null,
+        timings,
+        age
+      };
+
+      // Add password only for new staff or if changed
+      if (!isEdit) {
+        staffData.password = password;
+      } else if (password) {
+        staffData.password = password;
+      }
+
+      let savedStaff;
+      if (isEdit) {
+        // Update existing staff - use dbId instead of display id
+        savedStaff = await api.put(`/api/users/${initial.dbId || initial.id}`, staffData);
+      } else {
+        // Create new staff
+        savedStaff = await api.post('/api/users', staffData);
+      }
+
+      // Handle image upload if there's a new image
+      if (profileImage && savedStaff.id) {
+        console.log('Attempting to upload profile image:', profileImage);
+        console.log('For user ID:', savedStaff.id);
+        
+        const formData = new FormData();
+        formData.append('profileImage', profileImage);
+        formData.append('userId', savedStaff.id);
+        
+        console.log('FormData entries:');
+        for (let pair of formData.entries()) {
+          console.log(pair[0], pair[1]);
+        }
+        
+        try {
+          const imageResponse = await api.upload(`/api/profile-image?userId=${savedStaff.id}`, formData);
+          console.log('Image upload response:', imageResponse);
+          
+          // Update the saved staff data with the new profile image
+          if (imageResponse.profileImage) {
+            savedStaff.profileImage = imageResponse.profileImage;
+          }
+        } catch (imageError) {
+          console.error('Error uploading profile image:', imageError);
+          // Continue anyway, the staff was saved
+        }
+      }
+
+      // Close panel and trigger refresh
+      onClose(savedStaff);
+    } catch (err) {
+      console.error('Error saving staff:', err);
+      setError(err.message || 'Failed to save staff member');
+      setLoading(false);
+    }
   };
 
   if (!open) return null;
@@ -190,6 +321,19 @@ function AddEditPanel({ open, onClose, initial }) {
           </button>
         </div>
 
+        {error && (
+          <div style={{ 
+            background: '#E70000', 
+            color: '#fff', 
+            padding: 12, 
+            borderRadius: 8, 
+            marginBottom: 15,
+            fontSize: 14
+          }}>
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, flex: 1 }}>
             {/* Left Column */}
@@ -211,6 +355,21 @@ function AddEditPanel({ open, onClose, initial }) {
                   value={email} 
                   onChange={(e) => setEmail(e.target.value)} 
                   placeholder="Enter email address" 
+                  required
+                  style={{ width: '100%', padding: 12, borderRadius: 8, border: 'none', background: colors.inputBg, color: colors.text, fontSize: 14, minHeight: 40, boxSizing: 'border-box' }} 
+                />
+              </div>
+              
+              <div>
+                <div style={{ marginBottom: 4, fontWeight: 500, color: colors.text, fontSize: 14 }}>
+                  Password {isEdit && <span style={{ fontSize: 12, color: colors.muted }}>(leave empty to keep current)</span>}
+                </div>
+                <input 
+                  type="password" 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  placeholder={isEdit ? "Enter new password (optional)" : "Enter password"}
+                  required={!isEdit}
                   style={{ width: '100%', padding: 12, borderRadius: 8, border: 'none', background: colors.inputBg, color: colors.text, fontSize: 14, minHeight: 40, boxSizing: 'border-box' }} 
                 />
               </div>
@@ -223,9 +382,9 @@ function AddEditPanel({ open, onClose, initial }) {
                   style={{ width: '100%', padding: 12, borderRadius: 8, border: 'none', background: colors.inputBg, color: colors.text, fontSize: 14, minHeight: 40, boxSizing: 'border-box' }}
                 >
                   <option value="">Select role</option>
-                  <option value="Manager">Manager</option>
-                  <option value="Staff">Staff</option>
-                  <option value="Chef">Chef</option>
+                  <option value="ADMIN">Admin</option>
+                  <option value="STAFF">Staff</option>
+                  <option value="USER">User</option>
                 </select>
               </div>
               
@@ -335,18 +494,20 @@ function AddEditPanel({ open, onClose, initial }) {
             </button>
             <button 
               type="submit" 
+              disabled={loading}
               style={{ 
                 padding: '10px 20px', 
                 borderRadius: 6, 
-                background: colors.accent, 
+                background: loading ? colors.muted : colors.accent, 
                 border: 'none', 
-                color: '#333', 
+                color: loading ? '#999' : '#333', 
                 fontSize: 14, 
                 fontWeight: 600, 
-                cursor: 'pointer' 
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.6 : 1
               }}
             >
-              Confirm
+              {loading ? 'Saving...' : 'Confirm'}
             </button>
           </div>
         </form>

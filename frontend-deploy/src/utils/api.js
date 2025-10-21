@@ -2,7 +2,11 @@ export async function login(email, password) {
   const base = import.meta.env.VITE_API_URL || 'http://localhost:4000';
   const r = await fetch(base + '/api/auth/login', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache'
+    },
     body: JSON.stringify({ email, password }),
   });
   if (!r.ok) throw new Error('login failed');
@@ -14,15 +18,31 @@ export async function getCurrentUser() {
   const token = localStorage.getItem('token');
   if (!token) throw new Error('No token found');
   
-  const r = await fetch(base + '/api/auth/me', {
-    method: 'GET',
-    headers: { 
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-  });
-  if (!r.ok) throw new Error('Failed to get user info');
-  return r.json();
+  // Add timeout to prevent hanging
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+  
+  try {
+    const r = await fetch(base + '/api/auth/me', {
+      method: 'GET',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (!r.ok) throw new Error('Failed to get user info');
+    return r.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timeout');
+    }
+    throw error;
+  }
 }
 
 export async function updateProfile(profileData) {
@@ -74,7 +94,9 @@ export async function getOrders() {
   const token = localStorage.getItem('token');
   
   const headers = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache'
   };
   
   if (token) {
@@ -172,7 +194,9 @@ export async function getMenuItems() {
   const token = localStorage.getItem('token');
 
   const headers = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache'
   };
 
   if (token) {
@@ -196,12 +220,16 @@ export async function updateMenuItem(menuItemId, menuItemData) {
   const token = localStorage.getItem('token');
   
   const headers = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache'
   };
   
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  
+  console.log('🌐 API: Updating menu item', menuItemId, 'with data:', menuItemData)
   
   const r = await fetch(base + '/api/menu-items/' + menuItemId, {
     method: 'PUT',
@@ -211,9 +239,13 @@ export async function updateMenuItem(menuItemId, menuItemData) {
   
   if (!r.ok) {
     const error = await r.json();
+    console.error('❌ API: Update failed:', error)
     throw new Error(error.error || 'Failed to update menu item');
   }
-  return r.json();
+  
+  const result = await r.json();
+  console.log('✅ API: Update successful, response:', result)
+  return result;
 }
 
 export async function createMenuItem(menuItemData) {
@@ -253,16 +285,24 @@ export async function deleteMenuItem(menuItemId) {
     headers['Authorization'] = `Bearer ${token}`;
   }
   
-  const r = await fetch(base + '/api/menu-items/' + menuItemId, {
-    method: 'DELETE',
-    headers
-  });
-  
-  if (!r.ok) {
-    const error = await r.json();
-    throw new Error(error.error || 'Failed to delete menu item');
+  try {
+    const r = await fetch(base + '/api/menu-items/' + menuItemId, {
+      method: 'DELETE',
+      headers
+    });
+    
+    if (!r.ok) {
+      const errorData = await r.json().catch(() => ({ error: 'Unknown error' }));
+      if (r.status === 404) {
+        throw new Error('Menu item not found - the item may have already been deleted or the data is out of sync');
+      }
+      throw new Error(errorData.error || `Failed to delete menu item (${r.status})`);
+    }
+    return r.json();
+  } catch (error) {
+    console.error('Delete menu item error:', error);
+    throw error;
   }
-  return r.json();
 }
 
 // Category API functions
@@ -271,7 +311,9 @@ export async function getCategories() {
   const token = localStorage.getItem('token');
   
   const headers = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache'
   };
   
   if (token) {
@@ -340,7 +382,7 @@ export async function updateCategory(categoryId, categoryData) {
   return r.json();
 }
 
-export async function deleteCategory(categoryId) {
+export async function deleteCategory(categoryId, force = false) {
   const base = import.meta.env.VITE_API_URL || 'http://localhost:4000';
   const token = localStorage.getItem('token');
   
@@ -352,14 +394,19 @@ export async function deleteCategory(categoryId) {
     headers['Authorization'] = `Bearer ${token}`;
   }
   
-  const r = await fetch(base + '/api/categories/' + categoryId, {
+  const url = `${base}/api/categories/${categoryId}${force ? '?force=true' : ''}`;
+  
+  const r = await fetch(url, {
     method: 'DELETE',
     headers
   });
   
   if (!r.ok) {
-    const error = await r.json();
-    throw new Error(error.error || 'Failed to delete category');
+    const errorData = await r.json();
+    // Create enhanced error object with details
+    const error = new Error(errorData.error || 'Failed to delete category');
+    error.details = errorData.details; // Include item details if available
+    throw error;
   }
   return r.json();
 }
@@ -417,7 +464,9 @@ export async function getReservations() {
   const token = localStorage.getItem('token');
 
   const headers = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache'
   };
 
   if (token) {
@@ -564,7 +613,9 @@ export async function getInventoryItems() {
   const token = localStorage.getItem('token');
   
   const headers = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache'
   };
   
   if (token) {

@@ -1,11 +1,22 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const router = express.Router();
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
+const cache = require('../cache');
+const etagMiddleware = require('../middleware/etag-cache');
 
 // Get all orders
-router.get('/', async (req, res) => {
+router.get('/', etagMiddleware, async (req, res) => {
   try {
+    // Check cache first
+    const cacheKey = 'orders:all';
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      console.log('🚀 CACHE HIT! Returning cached orders (instant)');
+      return res.json(cached);
+    }
+
+    console.log('💾 CACHE MISS - Fetching orders from PostgreSQL (slow - Singapore server)...');
+    const startTime = Date.now();
     const orders = await prisma.order.findMany({
       include: {
         items: {
@@ -31,11 +42,12 @@ router.get('/', async (req, res) => {
         createdAt: 'desc'
       }
     });
+    console.log(`⚡ Orders query took ${Date.now() - startTime}ms`);
 
     // Transform the data to match frontend format
     const transformedOrders = orders.map(order => ({
       id: order.id,
-      orderNumber: order.id.slice(-4), // Use last 4 chars of ID as order number
+      orderNumber: order.id.slice(-4),
       customerName: order.user?.name || 'Guest',
       customerId: order.userId,
       customerEmail: order.user?.email,
@@ -56,11 +68,17 @@ router.get('/', async (req, res) => {
       items: order.items.map(item => ({
         name: item.menuItem.name,
         quantity: item.qty,
-        price: item.priceCents / 100 // Convert from cents to dollars
+        price: item.priceCents / 100
       })),
-      subtotal: order.totalCents / 100, // Convert from cents to dollars
+      subtotal: order.totalCents / 100,
       tableLabel: order.table?.label
     }));
+
+    // Cache for 2 MINUTES (orders change frequently, but still cache longer)
+    cache.set(cacheKey, transformedOrders, 120000);
+    
+    // Allow client caching for 5 seconds
+    res.set('Cache-Control', 'public, max-age=5');
 
     res.json(transformedOrders);
   } catch (error) {
@@ -149,6 +167,9 @@ router.post('/', async (req, res) => {
       subtotal: order.totalCents / 100,
       tableLabel: order.table?.label
     };
+
+    // Clear cache when data changes
+    cache.clearPattern('orders:');
 
     res.status(201).json(transformedOrder);
   } catch (error) {
@@ -251,6 +272,9 @@ router.put('/:id', async (req, res) => {
       tableLabel: order.table?.label
     };
 
+    // Clear cache when data changes
+    cache.clearPattern('orders:');
+
     res.json(transformedOrder);
   } catch (error) {
     console.error('Error updating order:', error);
@@ -272,6 +296,9 @@ router.delete('/:id', async (req, res) => {
     await prisma.order.delete({
       where: { id }
     });
+
+    // Clear cache when data changes
+    cache.clearPattern('orders:');
 
     res.json({ message: 'Order deleted successfully' });
   } catch (error) {

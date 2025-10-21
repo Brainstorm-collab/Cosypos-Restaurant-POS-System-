@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from './UserContext';
+import Toast from '../components/Toast.jsx';
 
 const colors = { 
   bg: '#111315', 
@@ -18,6 +19,14 @@ export default function Payment({ order, onPaymentComplete, onCancel }) {
   const [expiryDate, setExpiryDate] = useState('');
   const [cvv, setCvv] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast({ show: false, message: '', type: 'success' });
+    }, 3000);
+  };
 
   const handlePayment = async () => {
     setIsProcessing(true);
@@ -28,30 +37,6 @@ export default function Payment({ order, onPaymentComplete, onCancel }) {
       onPaymentComplete();
       showToast('Payment successful! Order completed.', 'success');
     }, 2000);
-  };
-
-  const showToast = (message, type = 'success') => {
-    // Simple toast implementation
-    const toast = document.createElement('div');
-    toast.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: ${type === 'success' ? colors.accent : '#F44336'};
-      color: ${type === 'success' ? '#333333' : '#FFFFFF'};
-      padding: 12px 20px;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      z-index: 10000;
-      animation: slideInRight 0.3s ease-out;
-    `;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-      document.body.removeChild(toast);
-    }, 3000);
   };
 
   return (
@@ -65,7 +50,7 @@ export default function Payment({ order, onPaymentComplete, onCancel }) {
         `}
       </style>
       
-      <div style={{ width: 1440, margin: '0 auto', position: 'relative' }}>
+      <div style={{ width: '100%', maxWidth: '100vw', margin: '0 auto', position: 'relative' }}>
         {/* Header */}
         <div style={{
           background: colors.panel,
@@ -411,6 +396,14 @@ export default function Payment({ order, onPaymentComplete, onCancel }) {
           </div>
         </div>
       </div>
+      
+      {/* Toast Notification */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ show: false, message: '', type: 'success' })}
+      />
     </div>
   );
 }

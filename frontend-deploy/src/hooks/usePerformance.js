@@ -1,154 +1,188 @@
-import { useCallback, useMemo, useRef, useEffect, useLayoutEffect, useState } from 'react';
+import { useCallback, useRef, useEffect, useState } from 'react';
 
-// Debounce hook for search and API calls
-export const useDebounce = (value, delay) => {
-  const [debouncedValue, setDebouncedValue] = useState(value);
+// Performance optimization hook
+export const usePerformance = () => {
+  const renderCountRef = useRef(0);
+  const lastRenderTimeRef = useRef(0);
 
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
+  // Track render performance
+  const trackRender = useCallback((componentName) => {
+    const now = performance.now();
+    const renderTime = now - lastRenderTimeRef.current;
+    renderCountRef.current += 1;
 
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-};
-
-// Memoized API call hook
-export const useMemoizedApiCall = (apiFunction, dependencies = []) => {
-  const cacheRef = useRef(new Map());
-  const promiseRef = useRef(new Map());
-
-  return useCallback(async (...args) => {
-    const cacheKey = JSON.stringify(args);
-    
-    // Return cached result if available
-    if (cacheRef.current.has(cacheKey)) {
-      return cacheRef.current.get(cacheKey);
+    if (process.env.NODE_ENV === 'development') {
+      if (renderTime > 16) { // More than one frame
+        console.warn(`🐌 Slow render: ${componentName} took ${renderTime.toFixed(2)}ms (render #${renderCountRef.current})`);
+      }
     }
 
-    // Return in-flight promise if available
-    if (promiseRef.current.has(cacheKey)) {
-      return promiseRef.current.get(cacheKey);
-    }
+    lastRenderTimeRef.current = now;
+  }, []);
 
-    const promise = apiFunction(...args)
-      .then(result => {
-        cacheRef.current.set(cacheKey, result);
-        promiseRef.current.delete(cacheKey);
-        return result;
-      })
-      .catch(error => {
-        promiseRef.current.delete(cacheKey);
-        throw error;
-      });
-
-    promiseRef.current.set(cacheKey, promise);
-    return promise;
-  }, dependencies);
-};
-
-// Virtual scrolling hook for large lists
-export const useVirtualScroll = (items, itemHeight, containerHeight) => {
-  const [scrollTop, setScrollTop] = useState(0);
-  
-  const visibleStart = Math.floor(scrollTop / itemHeight);
-  const visibleEnd = Math.min(
-    visibleStart + Math.ceil(containerHeight / itemHeight) + 1,
-    items.length
-  );
-  
-  const visibleItems = items.slice(visibleStart, visibleEnd);
-  const totalHeight = items.length * itemHeight;
-  const offsetY = visibleStart * itemHeight;
-
-  return {
-    visibleItems,
-    totalHeight,
-    offsetY,
-    setScrollTop
-  };
-};
-
-// Image preloading hook
-export const useImagePreload = (imageUrls) => {
-  const [loadedImages, setLoadedImages] = useState(new Set());
-  const loadingImagesRef = useRef(new Set());
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
+  // Debounce function for performance
+  const debounce = useCallback((func, delay) => {
+    let timeoutId;
+    return (...args) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => func.apply(null, args), delay);
     };
   }, []);
 
-  useEffect(() => {
-    const preloadImages = async () => {
-      const promises = imageUrls.map(url => {
-        if (loadedImages.has(url) || loadingImagesRef.current.has(url)) {
-          return Promise.resolve();
-        }
-        
-        loadingImagesRef.current.add(url);
-        
-        return new Promise((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => {
-            if (mountedRef.current) {
-              setLoadedImages(prev => new Set([...prev, url]));
-              loadingImagesRef.current.delete(url);
-            }
-            resolve();
-          };
-          img.onerror = reject;
-          img.src = url;
-        });
-      });
-
-      try {
-        await Promise.all(promises);
-      } catch (error) {
-        console.warn('Some images failed to preload:', error);
+  // Throttle function for performance
+  const throttle = useCallback((func, delay) => {
+    let lastCall = 0;
+    return (...args) => {
+      const now = Date.now();
+      if (now - lastCall >= delay) {
+        lastCall = now;
+        func.apply(null, args);
       }
     };
+  }, []);
 
-    if (imageUrls.length > 0) {
-      preloadImages();
-    }
-  }, [imageUrls]);
+  // Memoize expensive calculations
+  const memoize = useCallback((fn, deps) => {
+    const cacheRef = useRef(new Map());
+    
+    return useCallback((...args) => {
+      const key = JSON.stringify(args);
+      
+      if (cacheRef.current.has(key)) {
+        return cacheRef.current.get(key);
+      }
+      
+      const result = fn(...args);
+      cacheRef.current.set(key, result);
+      
+      // Clean up cache if it gets too large
+      if (cacheRef.current.size > 100) {
+        cacheRef.current.clear();
+      }
+      
+      return result;
+    }, deps);
+  }, []);
 
-  return { loadedImages, loadingImages: Array.from(loadingImagesRef.current) };
+  // Optimize re-renders
+  const useStableCallback = useCallback((callback) => {
+    const callbackRef = useRef(callback);
+    callbackRef.current = callback;
+    
+    return useCallback((...args) => {
+      return callbackRef.current(...args);
+    }, []);
+  }, []);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      renderCountRef.current = 0;
+      lastRenderTimeRef.current = 0;
+    };
+  }, []);
+
+  return {
+    trackRender,
+    debounce,
+    throttle,
+    memoize,
+    useStableCallback
+  };
 };
 
-// Performance monitoring hook
-export const usePerformanceMonitor = (componentName) => {
-  const renderStart = useRef(performance.now());
-  const renderCount = useRef(0);
+// Hook for lazy loading components
+export const useLazyLoad = (threshold = 0.1) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const elementRef = useRef(null);
 
-  // Capture start timestamp at the beginning of render
-  renderStart.current = performance.now();
+  useEffect(() => {
+    const inflater = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !hasLoaded) {
+          setIsVisible(true);
+          setHasLoaded(true);
+        }
+      },
+      { threshold }
+    );
 
-  useLayoutEffect(() => {
-    // Capture render end timestamp
-    const renderEnd = performance.now();
-    
-    // Compute render duration
-    const renderTime = renderEnd - renderStart.current;
-    
-    // Increment render count
-    renderCount.current += 1;
-    
-    // Log warning if render took too long
-    if (renderTime > 16) { // More than one frame (16ms)
-      console.warn(`${componentName} render took ${renderTime.toFixed(2)}ms (render #${renderCount.current})`);
+    if (elementRef.current) {
+      inflater.observe(elementRef.current);
     }
-    
-    // Update start timestamp for next render
-    renderStart.current = performance.now();
-  });
 
-  return { renderCount: renderCount.current };
+    return () => {
+      if (elementRef.current) {
+        inflater.unobserve(elementRef.current);
+      }
+    };
+  }, [threshold, hasLoaded]);
+
+  return { elementRef, isVisible, hasLoaded };
+};
+
+// Hook for optimizing API calls
+export const useOptimizedApi = () => {
+  const requestCacheRef = useRef(new Map());
+  const pendingRequestsRef = useRef(new Map());
+
+  const makeRequest = useCallback(async (url, options = {}) => {
+    const cacheKey = `${options.method || 'GET'}:${url}:${JSON.stringify(options.body || {})}`;
+    
+    // Check cache first
+    if (options.method === 'GET' && requestCacheRef.current.has(cacheKey)) {
+      const cached = requestCacheRef.current.get(cacheKey);
+      if (Date.now() - cached.timestamp < 300000) { // 5 minutes
+        return cached.data;
+      }
+    }
+
+    // Check if request is already pending
+    if (pendingRequestsRef.current.has(cacheKey)) {
+      return pendingRequestsRef.current.get(cacheKey);
+    }
+
+    // Make the request
+    const requestPromise = fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+      }
+    }).then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      return response.json();
+    }).then((data) => {
+      // Cache successful GET requests
+      if (options.method === 'GET') {
+        requestCacheRef.current.set(cacheKey, {
+          data,
+          timestamp: Date.now()
+        });
+      }
+      
+      // Remove from pending requests
+      pendingRequestsRef.current.delete(cacheKey);
+      
+      return data;
+    }).catch((error) => {
+      // Remove from pending requests on error
+      pendingRequestsRef.current.delete(cacheKey);
+      throw error;
+    });
+
+    // Add to pending requests
+    pendingRequestsRef.current.set(cacheKey, requestPromise);
+    
+    return requestPromise;
+  }, []);
+
+  const clearCache = useCallback(() => {
+    requestCacheRef.current.clear();
+  }, []);
+
+  return { makeRequest, clearCache };
 };

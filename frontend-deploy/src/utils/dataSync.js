@@ -30,8 +30,10 @@ class DataSync {
     };
   }
 
-  // Update data and notify all listeners
+  // Update data and notify all listeners IMMEDIATELY
   updateData(key, newData) {
+    console.log(`🔄 Updating ${key} data immediately:`, newData.length || 'N/A', 'items');
+    
     this.data[key] = newData;
     const callbacks = this.listeners.get(key);
     if (callbacks) {
@@ -42,6 +44,19 @@ class DataSync {
           console.error('Error in data sync callback:', error);
         }
       });
+    }
+    
+    // Force immediate update
+    this.forceImmediateUpdate(key, newData);
+  }
+
+  // Force immediate update for real-time sync
+  forceImmediateUpdate(key, newData) {
+    // Dispatch custom event for immediate updates
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cosypos-immediate-update', {
+        detail: { key, data: newData, timestamp: Date.now() }
+      }));
     }
   }
 
@@ -78,6 +93,29 @@ class DataSync {
     this.updateData('categories', categories);
   }
 
+  // Update specific category
+  updateCategory(categoryId, updatedCategory) {
+    const categories = [...this.data.categories];
+    const index = categories.findIndex(cat => cat.id === categoryId);
+    
+    if (index !== -1) {
+      categories[index] = { ...categories[index], ...updatedCategory };
+      this.updateData('categories', categories);
+    }
+  }
+
+  // Add new category
+  addCategory(newCategory) {
+    const categories = [...this.data.categories, newCategory];
+    this.updateData('categories', categories);
+  }
+
+  // Remove category
+  removeCategory(categoryId) {
+    const categories = this.data.categories.filter(cat => cat.id !== categoryId);
+    this.updateData('categories', categories);
+  }
+
   // Standardize menu item format
   standardizeMenuItem(item) {
     return {
@@ -85,7 +123,7 @@ class DataSync {
       apiId: item.apiId || item.id,
       name: item.name || '',
       description: item.description || '',
-      image: this.getStandardizedImage(item),
+      image: item.image || null,
       stock: parseInt(item.stock) || 0,
       category: typeof item.category === 'string' ? item.category : item.category?.name || 'Other',
       price: this.getStandardizedPrice(item),
@@ -96,6 +134,21 @@ class DataSync {
 
   // Get standardized image based on item name
   getStandardizedImage(item) {
+    // PRIORITY 1: Use uploaded image if it exists and is valid (but not default-food.png)
+    if (item.image && (item.image.startsWith('/') || item.image.startsWith('http')) && !item.image.includes('default-food.png')) {
+      return item.image;
+    }
+
+    // PRIORITY 2: Check for locally stored image
+    if (item.apiId) {
+      const imageKey = `menu_item_image_${item.apiId}`;
+      const localImage = localStorage.getItem(imageKey);
+      if (localImage) {
+        return localImage;
+      }
+    }
+
+    // PRIORITY 3: Use hardcoded fallback images only if no uploaded image
     const imageMap = {
       // Pizza items
       'Margherita Pizza': '/pizza.jpg',
@@ -108,42 +161,106 @@ class DataSync {
       'Chicken Burger': '/burger.jpg',
       'Cheeseburger': '/burger.jpg',
       'Bacon Burger': '/burger.jpg',
+      'Beef Burger': '/burger.jpg',
       
       // Chicken items
       'Chicken Parmesan': '/chicken-parmesan.png',
       'Grilled Chicken': '/grill chicken.jpg',
+      'Chicken Wings': '/grill chicken.jpg',
+      'Roasted Chicken': '/grill chicken.jpg',
+      'Roasted Chickens': '/grill chicken.jpg',
       
       // Beverage items
       'Coca Cola': '/cococola.jpg',
       'Fresh Orange Juice': '/orange juice.jpg',
+      'Fresh Juice': '/orange juice.jpg',
+      'Coffee': '/cococola.jpg',
       
       // Seafood items
       'Grilled Salmon': '/salamon.jpg',
+      'Fish & Chips': '/salamon.jpg',
       
       // Bakery items
       'Chocolate Cake': '/choclate cake.jpg',
-      'Apple Pie': '/apple pie.jpg'
+      'Apple Pie': '/apple pie.jpg',
+      'Apple Honey Pie': '/apple pie.jpg'
     };
 
-    // Check for locally stored image first
-    if (item.apiId) {
-      const imageKey = `menu_item_image_${item.apiId}`;
-      const localImage = localStorage.getItem(imageKey);
-      if (localImage) return localImage;
-    }
-
-    // Use specific image based on name
     const specificImage = imageMap[item.name];
-    if (specificImage) return specificImage;
-
-    // Use existing image if valid
-    if (item.image && (item.image.startsWith('/') || item.image.startsWith('http'))) {
-      return item.image;
+    if (specificImage) {
+      return specificImage;
     }
 
     // Default fallback
     return '/placeholder-food.jpg';
   }
+
+  // Clear cached images that might be causing issues
+  clearCachedImages() {
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if (key.startsWith('menu_item_image_') || key.includes('default-food')) {
+        localStorage.removeItem(key);
+      }
+    });
+  }
+
+  // Clear all cached data (lightweight version)
+  clearAllCache() {
+    console.log('🧹 Clearing cached data...');
+    
+    // Only clear specific cache keys, not everything
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if (key.startsWith('menu_item_') || key.startsWith('category_') || key.includes('cosypos_')) {
+        localStorage.removeItem(key);
+      }
+    });
+    
+    // Reset internal data
+    this.data = {
+      menuItems: [],
+      categories: [],
+      orders: [],
+      inventory: []
+    };
+    
+    // Clear any pending requests
+    if (this.pendingRequests) {
+      this.pendingRequests.clear();
+    }
+    
+    // Clear any cached images
+    this.clearCachedImages();
+    
+    // Force garbage collection if available
+    if (typeof window !== 'undefined' && window.gc) {
+      window.gc();
+    }
+    
+    console.log('✅ All cached data cleared');
+  }
+
+  // Force refresh all data from backend
+  async forceRefreshAll() {
+    console.log('🔄 Force refreshing all data from backend...');
+    
+    try {
+      // Clear cache first
+      this.clearAllCache();
+      
+      // Trigger refresh event
+      window.dispatchEvent(new CustomEvent('cosypos-force-refresh', {
+        detail: { timestamp: Date.now() }
+      }));
+      
+      return true;
+    } catch (error) {
+      console.error('Error force refreshing data:', error);
+      return false;
+    }
+  }
+
 
   // Get standardized price format
   getStandardizedPrice(item) {
@@ -190,12 +307,21 @@ class DataSync {
     // Update internal data
     this.updateData(type, data);
     
-    // Also update localStorage for persistence
-    localStorage.setItem(`cosypos_${type}`, JSON.stringify(data));
+    // REMOVED: Don't persist to localStorage to avoid stale data
+    // Clear any existing localStorage cache for this type
+    localStorage.removeItem(`cosypos_${type}`);
     
     // Trigger custom event for cross-component communication
     window.dispatchEvent(new CustomEvent('cosypos-data-update', {
-      detail: { type, data }
+      detail: { type, data, timestamp: Date.now() }
+    }));
+  }
+  
+  // Trigger refetch after mutation
+  triggerRefetch(type) {
+    console.log(`🔄 Triggering refetch for ${type}`);
+    window.dispatchEvent(new CustomEvent('cosypos-refetch-required', {
+      detail: { type, timestamp: Date.now() }
     }));
   }
 }

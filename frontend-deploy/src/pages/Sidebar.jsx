@@ -238,7 +238,13 @@ export default function Sidebar() {
   const navigate = useNavigate()
   const location = useLocation()
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const { user } = useUser()
+  
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setIsMobileMenuOpen(false)
+  }, [location.pathname])
   
   
   const onLogout = () => {
@@ -246,55 +252,133 @@ export default function Sidebar() {
     navigate('/', { replace: true })
   }
 
-  // Define navigation items based on user role (memoized for performance)
+  // Define navigation items based on user permissions (memoized for performance)
   const navigationItems = useMemo(() => {
     if (!user) {
       return []
     }
 
-    const allItems = [
-      { to: '/dashboard', label: 'Dashboard', icon: DashboardGridIcon },
-      { to: '/menu', label: 'Menu', icon: MenuIcon },
-      { to: '/orders', label: 'Order/Table', icon: OrdersIcon },
-      { to: '/reservation', label: 'Reservation', icon: ReservationIcon },
+    // Parse permissions if they're a string
+    const permissions = typeof user.permissions === 'string' 
+      ? JSON.parse(user.permissions) 
+      : user.permissions || {}
+
+    // All possible items
+    const allPossibleItems = [
+      { to: '/dashboard', label: 'Dashboard', icon: DashboardGridIcon, permission: 'dashboard' },
+      { to: '/menu', label: 'Menu', icon: MenuIcon, permission: 'menu' },
+      { to: '/orders', label: 'Order/Table', icon: OrdersIcon, permission: 'orders' },
+      { to: '/reservation', label: 'Reservation', icon: ReservationIcon, permission: 'reservation' },
+      { to: '/staff', label: 'Staff', icon: StaffIcon, permission: 'staff' },
+      { to: '/inventory', label: 'Inventory', icon: InventoryIcon, permission: 'inventory' },
+      { to: '/reports', label: 'Reports', icon: ReportsIcon, permission: 'reports' },
     ]
 
-    const staffItems = [
-      { to: '/staff', label: 'Staff', icon: StaffIcon },
-      { to: '/inventory', label: 'Inventory', icon: InventoryIcon },
-    ]
-
-    const adminItems = [
-      { to: '/reports', label: 'Reports', icon: ReportsIcon },
-    ]
-
-    let items = [...allItems]
-
-    // Only add staff items for STAFF and ADMIN roles
-    if (user.role === 'STAFF' || user.role === 'ADMIN') {
-      items = [...items, ...staffItems]
-    }
-
-    // Only add admin items for ADMIN role
+    // Filter items based on permissions
+    // ADMIN has access to everything
     if (user.role === 'ADMIN') {
-      items = [...items, ...adminItems]
+      return allPossibleItems
     }
-    
-    return items
-  }, [user?.role])
+
+    // For other users, filter by permissions
+    return allPossibleItems.filter(item => permissions[item.permission] === true)
+  }, [user?.role, user?.permissions])
   
   return (
-    <aside style={{ 
-      position: 'fixed', 
-      left: 0, 
-      top: 0, 
-      bottom: 0, 
-      width: 176, 
-      padding: 24, 
-      background: colors.panel, 
-      borderRadius: '0px 30px 30px 0px',
-      zIndex: 1000
-    }}>
+    <>
+      {/* Mobile Overlay */}
+      <div 
+        className={`sidebar-overlay ${isMobileMenuOpen ? 'visible' : ''}`}
+        onClick={() => setIsMobileMenuOpen(false)}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          zIndex: 9998,
+          display: isMobileMenuOpen ? 'block' : 'none'
+        }}
+      />
+      
+      {/* Hamburger Menu Button (Mobile Only) */}
+      <button
+        className="hamburger-menu"
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        style={{
+          position: 'fixed',
+          top: 20,
+          left: 16,
+          zIndex: 10000,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          width: 28,
+          height: 22,
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          padding: 0
+        }}
+      >
+        <style>{`
+          @media (min-width: 1024px) {
+            .hamburger-menu {
+              display: none !important;
+            }
+          }
+        `}</style>
+        <span style={{
+          display: 'block',
+          height: 3,
+          width: '100%',
+          background: colors.accent,
+          borderRadius: 2,
+          transition: 'all 0.3s ease',
+          transform: isMobileMenuOpen ? 'translateY(9.5px) rotate(45deg)' : 'none'
+        }} />
+        <span style={{
+          display: 'block',
+          height: 3,
+          width: '100%',
+          background: colors.accent,
+          borderRadius: 2,
+          transition: 'all 0.3s ease',
+          opacity: isMobileMenuOpen ? 0 : 1
+        }} />
+        <span style={{
+          display: 'block',
+          height: 3,
+          width: '100%',
+          background: colors.accent,
+          borderRadius: 2,
+          transition: 'all 0.3s ease',
+          transform: isMobileMenuOpen ? 'translateY(-9.5px) rotate(-45deg)' : 'none'
+        }} />
+      </button>
+      
+      {/* Sidebar */}
+      <aside style={{ 
+        position: 'fixed', 
+        left: isMobileMenuOpen ? 0 : '-100%',
+        top: 0, 
+        bottom: 0, 
+        width: 280,
+        maxWidth: '80vw',
+        padding: 24, 
+        background: colors.panel, 
+        borderRadius: '0px 30px 30px 0px',
+        zIndex: 9999,
+        transition: 'left 0.3s ease',
+        overflowY: 'auto'
+      }}>
+        <style>{`
+          @media (min-width: 1024px) {
+            aside {
+              left: 0 !important;
+              width: 176px !important;
+              max-width: 176px !important;
+            }
+          }
+        `}</style>
       <div style={{ 
         fontFamily: 'Poppins, system-ui, sans-serif', 
         fontWeight: 600, 
@@ -447,5 +531,6 @@ export default function Sidebar() {
         </div>
       )}
     </aside>
+    </>
   )
 }

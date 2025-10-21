@@ -16,8 +16,12 @@ model User {
   name          String
   phone         String?
   profileImage  String?
+  permissions   String?        @default("{\"dashboard\":true,\"menu\":true,\"orders\":true,\"reservation\":true,\"staff\":false,\"inventory\":false,\"reports\":false}")
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+  age           Int?
+  salary        Float?
+  timings       String?
   attendance    Attendance[]
   notifications Notification[]
   orders        Order[]
@@ -137,13 +141,18 @@ model Reservation {
 }
 
 model Attendance {
-  id        String    @id @default(cuid())
+  id        String           @id @default(cuid())
   userId    String
-  clockIn   DateTime
+  clockIn   DateTime?
   clockOut  DateTime?
-  breaksMin Int       @default(0)
-  createdAt DateTime  @default(now())
-  user      User      @relation(fields: [userId], references: [id])
+  breaksMin Int              @default(0)
+  createdAt DateTime         @default(now())
+  date      DateTime         @default(now())
+  status    AttendanceStatus @default(PRESENT)
+  user      User             @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([date])
 }
 
 model Payment {
@@ -192,4 +201,11 @@ enum ReservationStatus {
   CANCELLED
   NO_SHOW
   COMPLETED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_SHIFT
+  LEAVE
 }

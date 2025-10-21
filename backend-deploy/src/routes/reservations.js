@@ -69,6 +69,11 @@ const mockReservations = [
 // Get all reservations
 router.get('/', async (req, res) => {
   try {
+    // Disable caching to ensure real-time updates
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    
     res.json(mockReservations);
   } catch (error) {
     console.error('Error fetching reservations:', error);
@@ -78,6 +83,11 @@ router.get('/', async (req, res) => {
 
 // Get reservations by date and floor
 router.get('/by-date-floor', async (req, res) => {
+  // Disable caching to ensure real-time updates
+  res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  
   try {
     const { date, floor } = req.query;
     

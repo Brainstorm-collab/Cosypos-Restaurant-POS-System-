@@ -5,6 +5,8 @@ import { useUser } from './UserContext';
 import { getMenuItems } from '../utils/api';
 import Layout from './Layout.jsx';
 import { onInventoryUpdate } from '../utils/inventorySync';
+import dataSync from '../utils/dataSync';
+import realtimeSync from '../utils/realtimeSync';
 
 const colors = {
   bg: '#111315',
@@ -25,14 +27,29 @@ function DollarIcon() {
 
 function StatCard({ title, value, rightIcon, date, isDailySales = false, chartPattern = 'daily' }) {
   return (
-    <div style={{ 
+    <div className="stat-card" style={{ 
       position: 'relative', 
       background: colors.panel, 
       borderRadius: 10, 
-      height: 166.41, 
-      width: 369.23,
-      color: colors.text 
+      minHeight: 140,
+      width: '100%',
+      color: colors.text,
+      padding: 16
     }}>
+      <style>{`
+        @media (min-width: 768px) {
+          .stat-card {
+            min-height: 150px !important;
+            padding: 18px !important;
+          }
+        }
+        @media (min-width: 1024px) {
+          .stat-card {
+            min-height: 166px !important;
+            padding: 20px !important;
+          }
+        }
+      `}</style>
       {/* Title */}
       <div style={{ 
         position: 'absolute', 
@@ -205,7 +222,30 @@ function ListCard({ title, dishes = [], getImagePath }) {
   // Use the dishes prop passed from parent component
 
   return (
-    <div style={{ position: 'relative', background: colors.panel, borderRadius: 10, height: 466, padding: 24, color: colors.text }}>
+    <div style={{ 
+      position: 'relative', 
+      background: colors.panel, 
+      borderRadius: 10, 
+      height: 'auto',
+      minHeight: 300,
+      padding: 16, 
+      color: colors.text,
+      width: '100%'
+    }}>
+      <style>{`
+        @media (min-width: 768px) {
+          .list-card {
+            min-height: 400px;
+            padding: 20px !important;
+          }
+        }
+        @media (min-width: 1024px) {
+          .list-card {
+            min-height: 466px;
+            padding: 24px !important;
+          }
+        }
+      `}</style>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ fontSize: 25, fontWeight: 500 }}>{title}</div>
         <a href="#" style={{ color: colors.accent, textDecoration: 'underline' }}>See All</a>
@@ -341,33 +381,66 @@ export default function Dashboard() {
     return cleanup;
   }, []);
 
-  // Refresh menu items when component becomes visible (for real-time updates)
+  // Listen for real-time data updates from other components
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        const refreshMenuItems = async () => {
-          try {
-            const items = await getMenuItems();
-            // Transform to Dashboard format
-            const transformedItems = items.map(item => ({
-              name: item.name,
-              price: `$${(item.priceCents / 100).toFixed(2)}`,
-              status: item.availability,
-              serving: 'Serving : 01 person',
-              category: item.category?.name || 'Other'
-            }));
-            setMenuItems(transformedItems);
-          } catch (error) {
-            console.error('Error refreshing menu items:', error);
-          }
-        };
-        refreshMenuItems();
+    // Subscribe to menu items updates
+    const unsubscribeMenuItems = dataSync.subscribe('menuItems', (updatedItems) => {
+      // Transform to Dashboard format
+      const transformedItems = updatedItems.map(item => ({
+        name: item.name,
+        price: item.price || `$${(item.priceCents / 100).toFixed(2)}`,
+        status: item.availability,
+        serving: 'Serving : 01 person',
+        category: item.category?.name || item.category || 'Other'
+      }));
+      setMenuItems(transformedItems);
+    });
+    
+    // Listen for global data updates
+    const handleGlobalUpdate = (event) => {
+      const { type, data } = event.detail;
+      if (type === 'menuItems') {
+        // Transform to Dashboard format
+        const transformedItems = data.map(item => ({
+          name: item.name,
+          price: item.price || `$${(item.priceCents / 100).toFixed(2)}`,
+          status: item.availability,
+          serving: 'Serving : 01 person',
+          category: item.category?.name || item.category || 'Other'
+        }));
+        setMenuItems(transformedItems);
       }
     };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Listen for real-time refresh events
+    const handleRealtimeRefresh = async () => {
+      console.log('🔄 Dashboard real-time refresh triggered');
+      try {
+        const items = await getMenuItems();
+        const transformedItems = items.map(item => ({
+          name: item.name,
+          price: `$${(item.priceCents / 100).toFixed(2)}`,
+          status: item.availability,
+          serving: 'Serving : 01 person',
+          category: item.category?.name || 'Other'
+        }));
+        setMenuItems(transformedItems);
+      } catch (error) {
+        console.error('Error refreshing dashboard data:', error);
+      }
+    };
+    
+    window.addEventListener('cosypos-data-update', handleGlobalUpdate);
+    window.addEventListener('realtime-refresh', handleRealtimeRefresh);
+    
+    return () => {
+      unsubscribeMenuItems();
+      window.removeEventListener('cosypos-data-update', handleGlobalUpdate);
+      window.removeEventListener('realtime-refresh', handleRealtimeRefresh);
+    };
   }, []);
+
+  // Removed aggressive visibility change handler to prevent duplicate loading
 
   return (
     <Layout 
@@ -427,7 +500,7 @@ export default function Dashboard() {
               }}
             >
               <img 
-                src={user?.profileImage ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${user.profileImage}` : "/profile img icon.jpg"} 
+                src={user?.profileImage ? (import.meta.env.DEV ? user.profileImage : `${import.meta.env.VITE_API_URL}${user.profileImage}`) : "/profile img icon.jpg"} 
                 alt="Profile" 
                 style={{ 
                   width: '100%',
@@ -444,127 +517,222 @@ export default function Dashboard() {
           </>
         )}>
           {/* Stat row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
-            <StatCard title="Daily Sales" value="$2k" date="9 Feburary 2024" isDailySales={true} chartPattern="daily" />
-            <StatCard title="Monthly Revenue" value="$55k" date="1 Jan - 1 Feb" isDailySales={true} chartPattern="monthly" />
-            <StatCard title="Table Occupacy" value="25 Tables" date="Current Status" isDailySales={true} chartPattern="tables" />
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: '1fr',
+            gap: 16
+          }}>
+            <style>{`
+              @media (min-width: 768px) {
+                .stats-grid {
+                  grid-template-columns: repeat(2, 1fr) !important;
+                  gap: 20px !important;
+                }
+              }
+              @media (min-width: 1024px) {
+                .stats-grid {
+                  grid-template-columns: repeat(3, 1fr) !important;
+                  gap: 24px !important;
+                }
+              }
+            `}</style>
+            <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+              <StatCard title="Daily Sales" value="$2k" date="9 Feburary 2024" isDailySales={true} chartPattern="daily" />
+              <StatCard title="Monthly Revenue" value="$55k" date="1 Jan - 1 Feb" isDailySales={true} chartPattern="monthly" />
+              <StatCard title="Table Occupacy" value="25 Tables" date="Current Status" isDailySales={true} chartPattern="tables" />
+            </div>
           </div>
 
           {/* Lists */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 24 }}>
-            <ListCard title="Popular Dishes" dishes={popularDishes} getImagePath={getImagePath} />
-            <ListCard title="Recent Orders" dishes={recentOrders} getImagePath={getImagePath} />
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: '1fr',
+            gap: 16, 
+            marginTop: 16
+          }}>
+            <style>{`
+              @media (min-width: 768px) {
+                .lists-grid {
+                  gap: 20px !important;
+                  margin-top: 20px !important;
+                }
+              }
+              @media (min-width: 1024px) {
+                .lists-grid {
+                  grid-template-columns: repeat(2, 1fr) !important;
+                  gap: 24px !important;
+                  margin-top: 24px !important;
+                }
+              }
+            `}</style>
+            <div className="lists-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+              <ListCard title="Popular Dishes" dishes={popularDishes} getImagePath={getImagePath} />
+              <ListCard title="Recent Orders" dishes={recentOrders} getImagePath={getImagePath} />
+            </div>
           </div>
 
           {/* Overview Chart */}
-          <div style={{ 
-            marginTop: 24, 
+          <div className="chart-container" style={{ 
+            marginTop: 16, 
             background: colors.panel, 
-            borderRadius: 10.0657, 
-            height: 513.85, 
+            borderRadius: 10, 
+            height: 'auto',
+            minHeight: 400,
             position: 'relative',
-            width: 1189
+            width: '100%',
+            padding: 16,
+            overflowX: 'auto'
           }}>
+            <style>{`
+              @media (min-width: 768px) {
+                .chart-container {
+                  margin-top: 20px !important;
+                  min-height: 450px !important;
+                  padding: 20px !important;
+                }
+              }
+              @media (min-width: 1024px) {
+                .chart-container {
+                  margin-top: 24px !important;
+                  min-height: 514px !important;
+                  padding: 24px !important;
+                  overflow-x: visible !important;
+                }
+              }
+            `}</style>
             {/* Title */}
             <div style={{ 
-              position: 'absolute',
-              left: 30.18,
-              top: 32.68,
               fontFamily: 'Poppins',
               fontWeight: 500,
-              fontSize: 25,
-              lineHeight: '38px',
-              color: '#FFFFFF'
+              fontSize: 'clamp(18px, 4vw, 25px)',
+              lineHeight: '1.4',
+              color: '#FFFFFF',
+              marginBottom: 16
             }}>
               Overview
             </div>
 
             {/* All Buttons Container */}
             <div style={{ 
-              position: 'absolute',
-              right: 30.18,
-              top: 25.68,
               display: 'flex',
-              gap: 25.16,
-              alignItems: 'center'
+              gap: 12,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              marginBottom: 16
             }}>
+              <style>{`
+                @media (min-width: 768px) {
+                  .buttons-container {
+                    gap: 16px !important;
+                  }
+                }
+                @media (min-width: 1024px) {
+                  .buttons-container {
+                    gap: 25px !important;
+                    position: absolute;
+                    right: 30px;
+                    top: 26px;
+                    flex-wrap: nowrap !important;
+                  }
+                }
+              `}</style>
+              <div className="buttons-container" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               {/* Time Period Selector */}
               <div style={{ 
                 display: 'flex',
-                gap: 25.16,
-                alignItems: 'center'
+                gap: 8,
+                alignItems: 'center',
+                flexWrap: 'wrap'
               }}>
-                <div 
-                  onClick={() => setSelectedPeriod('Monthly')}
-                  style={{ 
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    padding: '14.092px 22.1445px',
-                    width: 109.29,
-                    height: 52.18,
+                <style>{`
+                  @media (min-width: 768px) {
+                    .period-selector {
+                      gap: 16px !important;
+                    }
+                  }
+                  @media (min-width: 1024px) {
+                    .period-selector {
+                      gap: 25px !important;
+                      flex-wrap: nowrap !important;
+                    }
+                  }
+                `}</style>
+                <div className="period-selector" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div 
+                    onClick={() => setSelectedPeriod('Monthly')}
+                    style={{ 
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      padding: '10px 16px',
+                      minWidth: 80,
+                      height: 'auto',
+                      minHeight: 44,
                     background: selectedPeriod === 'Monthly' ? colors.accent : 'transparent',
-                    borderRadius: 7.47799,
-                    fontFamily: 'Poppins',
-                    fontWeight: selectedPeriod === 'Monthly' ? 500 : 400,
-                    fontSize: 16,
-                    lineHeight: '24px',
-                    textAlign: 'center',
-                    color: selectedPeriod === 'Monthly' ? '#333333' : '#FFFFFF',
-                    cursor: 'pointer',
-                    boxSizing: 'border-box',
-                    border: selectedPeriod === 'Monthly' ? 'none' : '1px solid #444'
-                  }}
-                >
-                  Monthly
-                </div>
-                <div 
-                  onClick={() => setSelectedPeriod('Daily')}
-                  style={{ 
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    padding: '14.092px 22.1445px',
-                    width: 109.29,
-                    height: 52.18,
-                    background: selectedPeriod === 'Daily' ? colors.accent : 'transparent',
-                    borderRadius: 7.47799,
-                    fontFamily: 'Poppins',
-                    fontWeight: selectedPeriod === 'Daily' ? 500 : 400,
-                    fontSize: 16,
-                    lineHeight: '24px',
-                    textAlign: 'center',
-                    color: selectedPeriod === 'Daily' ? '#333333' : '#FFFFFF',
-                    cursor: 'pointer',
-                    boxSizing: 'border-box',
-                    border: selectedPeriod === 'Daily' ? 'none' : '1px solid #444'
-                  }}
-                >
-                  Daily
-                </div>
-                <div 
-                  onClick={() => setSelectedPeriod('Weekly')}
-                  style={{ 
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    padding: '14.092px 22.1445px',
-                    width: 109.29,
-                    height: 52.18,
-                    background: selectedPeriod === 'Weekly' ? colors.accent : 'transparent',
-                    borderRadius: 7.47799,
-                    fontFamily: 'Poppins',
-                    fontWeight: selectedPeriod === 'Weekly' ? 500 : 400,
-                    fontSize: 16,
-                    lineHeight: '24px',
-                    textAlign: 'center',
-                    color: selectedPeriod === 'Weekly' ? '#333333' : '#FFFFFF',
-                    cursor: 'pointer',
-                    boxSizing: 'border-box',
-                    border: selectedPeriod === 'Weekly' ? 'none' : '1px solid #444'
-                  }}
-                >
-                  Weekly
+                      borderRadius: 8,
+                      fontFamily: 'Poppins',
+                      fontWeight: selectedPeriod === 'Monthly' ? 500 : 400,
+                      fontSize: 'clamp(14px, 3vw, 16px)',
+                      lineHeight: '1.5',
+                      textAlign: 'center',
+                      color: selectedPeriod === 'Monthly' ? '#333333' : '#FFFFFF',
+                      cursor: 'pointer',
+                      boxSizing: 'border-box',
+                      border: selectedPeriod === 'Monthly' ? 'none' : '1px solid #444'
+                    }}
+                  >
+                    Monthly
+                  </div>
+                  <div 
+                    onClick={() => setSelectedPeriod('Daily')}
+                    style={{ 
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      padding: '10px 16px',
+                      minWidth: 80,
+                      height: 'auto',
+                      minHeight: 44,
+                      background: selectedPeriod === 'Daily' ? colors.accent : 'transparent',
+                      borderRadius: 8,
+                      fontFamily: 'Poppins',
+                      fontWeight: selectedPeriod === 'Daily' ? 500 : 400,
+                      fontSize: 'clamp(14px, 3vw, 16px)',
+                      lineHeight: '1.5',
+                      textAlign: 'center',
+                      color: selectedPeriod === 'Daily' ? '#333333' : '#FFFFFF',
+                      cursor: 'pointer',
+                      boxSizing: 'border-box',
+                      border: selectedPeriod === 'Daily' ? 'none' : '1px solid #444'
+                    }}
+                  >
+                    Daily
+                  </div>
+                  <div 
+                    onClick={() => setSelectedPeriod('Weekly')}
+                    style={{ 
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      padding: '10px 16px',
+                      minWidth: 80,
+                      height: 'auto',
+                      minHeight: 44,
+                      background: selectedPeriod === 'Weekly' ? colors.accent : 'transparent',
+                      borderRadius: 8,
+                      fontFamily: 'Poppins',
+                      fontWeight: selectedPeriod === 'Weekly' ? 500 : 400,
+                      fontSize: 'clamp(14px, 3vw, 16px)',
+                      lineHeight: '1.5',
+                      textAlign: 'center',
+                      color: selectedPeriod === 'Weekly' ? '#333333' : '#FFFFFF',
+                      cursor: 'pointer',
+                      boxSizing: 'border-box',
+                      border: selectedPeriod === 'Weekly' ? 'none' : '1px solid #444'
+                    }}
+                  >
+                    Weekly
+                  </div>
                 </div>
               </div>
 
@@ -573,17 +741,18 @@ export default function Dashboard() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 7.48,
-                padding: '14.092px 22.1445px',
-                width: 119.89,
-                height: 52.18,
-                border: `0.747799px solid ${colors.accent}`,
-                borderRadius: 7.47799,
+                gap: 8,
+                padding: '10px 16px',
+                minWidth: 100,
+                height: 'auto',
+                minHeight: 44,
+                border: `1px solid ${colors.accent}`,
+                borderRadius: 8,
                 color: colors.accent,
                 fontFamily: 'Poppins',
                 fontWeight: 500,
-                fontSize: 16,
-                lineHeight: '24px',
+                fontSize: 'clamp(14px, 3vw, 16px)',
+                lineHeight: '1.5',
                 cursor: 'pointer',
                 boxSizing: 'border-box'
               }}>
@@ -593,17 +762,28 @@ export default function Dashboard() {
                 </svg>
                 Export
               </div>
+              </div>
             </div>
 
             {/* Legend */}
             <div style={{ 
-              position: 'absolute',
-              left: 30.18,
-              top: 90.98,
               display: 'flex',
-              gap: 25.16,
-              alignItems: 'center'
+              gap: 16,
+              alignItems: 'center',
+              marginBottom: 16,
+              flexWrap: 'wrap'
             }}>
+              <style>{`
+                @media (min-width: 1024px) {
+                  .legend-container {
+                    position: absolute;
+                    left: 30px;
+                    top: 91px;
+                    gap: 25px !important;
+                  }
+                }
+              `}</style>
+              <div className="legend-container" style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7.48 }}>
                 <div style={{ 
                   width: 28.18, 
@@ -638,16 +818,34 @@ export default function Dashboard() {
                   Revenue
                 </span>
               </div>
+              </div>
             </div>
 
             {/* Chart Area */}
             <div style={{ 
-              position: 'absolute',
-              left: 30.18,
-              top: 141.89,
-              width: 1091.22,
-              height: 268.83
+              position: 'relative',
+              width: '100%',
+              height: 'auto',
+              minHeight: 250,
+              marginTop: 16
             }}>
+              <style>{`
+                @media (min-width: 768px) {
+                  .chart-area {
+                    min-height: 280px !important;
+                  }
+                }
+                @media (min-width: 1024px) {
+                  .chart-area {
+                    position: absolute;
+                    left: 30px;
+                    top: 142px;
+                    width: calc(100% - 60px) !important;
+                    min-height: 269px !important;
+                  }
+                }
+              `}</style>
+              <div className="chart-area" style={{ position: 'relative', width: '100%', minHeight: 250 }}>
               {/* Grid Lines */}
               <div style={{ 
                 position: 'absolute',
@@ -735,7 +933,24 @@ export default function Dashboard() {
             </div>
 
             {/* X-axis Labels */}
-            <div style={{ position: 'absolute', width: 1086.39, height: 24, left: 32.19, top: 439.63 }}>
+            <div style={{ 
+              position: 'relative',
+              width: '100%',
+              height: 'auto',
+              marginTop: 16,
+              overflowX: 'auto'
+            }}>
+              <style>{`
+                @media (min-width: 1024px) {
+                  .x-axis-labels {
+                    position: absolute;
+                    width: calc(100% - 60px);
+                    left: 32px;
+                    top: 440px;
+                  }
+                }
+              `}</style>
+              <div className="x-axis-labels" style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'space-between', minWidth: 600 }}>
               {selectedPeriod === 'Monthly' ? (
                 <>
                   <div style={{ position: 'absolute', left: 0, top: 0, fontFamily: 'Poppins', fontWeight: 400, fontSize: 16, lineHeight: '23px', textAlign: 'center', letterSpacing: '0.06em', textTransform: 'uppercase', color: '#FFFFFF' }}>JAN</div>
@@ -772,7 +987,9 @@ export default function Dashboard() {
               )}
             </div>
           </div>
-        </Layout>
+        </div>
+      </div>
+    </Layout>
   );
 }
 
