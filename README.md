@@ -2,7 +2,7 @@
 
 # 🍽️ CosyPOS - Modern Restaurant Management System
 
-![CosyPOS Demo Dashboard](https://raw.githubusercontent.com/yourusername/cosypos/main/cosypos-clean/frontend-deploy/public/demo-cosypos.png)
+![CosyPOS Demo Dashboard](https://raw.githubusercontent.com/Brainstorm-collab/cosypos/main/cosypos-clean/frontend-deploy/public/demo-cosypos.png)
 
 > 🖼️ **Note:** Replace `yourusername` and `cosypos` in the image URL above with your actual GitHub username and repository name
 
