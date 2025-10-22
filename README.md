@@ -2,7 +2,7 @@
 
 # 🍽️ CosyPOS - Modern Restaurant Management System
 
-![CosyPOS Demo Dashboard](https://raw.githubusercontent.com/Brainstorm-collab/cosyposy-Org/main/cosypos-clean/frontend-deploy/public/demo-cosypos.png)
+![CosyPOS Demo Dashboard](https://raw.githubusercontent.com/Brainstorm-collab/cosyposy-duplicate/main/frontend-deploy/public/demo-cosypos.png)
 
 **A comprehensive, full-stack restaurant Point of Sale (POS) system with real-time synchronization, role-based access control, and modern UI/UX**
 
@@ -165,7 +165,7 @@ CosyPOS is a modern, feature-rich restaurant management system designed to strea
 <summary>Click to view screenshots</summary>
 
 #### Dashboard
-![Dashboard](https://raw.githubusercontent.com/Brainstorm-collab/cosyposy-Org/main/cosypos-clean/frontend-deploy/public/demo-cosypos.png)
+![Dashboard](https://raw.githubusercontent.com/Brainstorm-collab/cosyposy-duplicate/main/frontend-deploy/public/demo-cosypos.png)
 
 #### Menu Management
 *Screenshot coming soon*
