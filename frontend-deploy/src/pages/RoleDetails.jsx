@@ -575,6 +575,8 @@ export default function RoleDetails() {
             left: 0,
             right: 0,
             bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            backdropFilter: 'blur(2px)',
             zIndex: 999
           }}
         />
@@ -590,6 +592,8 @@ export default function RoleDetails() {
             left: 0,
             right: 0,
             bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            backdropFilter: 'blur(2px)',
             zIndex: 999
           }}
         />

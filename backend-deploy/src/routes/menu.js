@@ -43,12 +43,12 @@ router.get('/categories', etagMiddleware, async (req, res) => {
       return data;
     });
     
-    // Cache for 5 MINUTES (increased from 30 seconds for better performance)
-    cache.set(cacheKey, categories, 300000);
-    console.log('✅ Stored categories in cache for 5 minutes');
+    // Cache for 1 HOUR (optimized for remote database performance)
+    cache.set(cacheKey, categories, 3600000);
+    console.log('✅ Stored categories in cache for 1 hour');
     
-    // Allow some caching on client side (5 seconds)
-    res.set('Cache-Control', 'public, max-age=5');
+    // Allow some caching on client side (30 seconds)
+    res.set('Cache-Control', 'public, max-age=30');
     
     res.json(categories);
   } catch (error) {
@@ -296,12 +296,12 @@ router.get('/menu-items', etagMiddleware, async (req, res) => {
       }
     };
     
-    // Cache for 5 MINUTES (increased from 30 seconds for better performance)
-    cache.set(cacheKey, response, 300000);
-    console.log('✅ Stored in cache for 5 minutes');
+    // Cache for 1 HOUR (optimized for remote database performance)
+    cache.set(cacheKey, response, 3600000);
+    console.log('✅ Stored in cache for 1 hour');
     
-    // Allow some caching on client side (5 seconds)
-    res.set('Cache-Control', 'public, max-age=5');
+    // Allow some caching on client side (30 seconds)
+    res.set('Cache-Control', 'public, max-age=30');
     
     res.json(response);
   } catch (error) {
