@@ -504,9 +504,38 @@ router.delete('/menu-items/:id', requireAnyAuth(), async (req, res) => {
   try {
     const { id } = req.params;
     
+    // Get the item first to check for Cloudinary image
+    const item = await prisma.menuItem.findUnique({
+      where: { id },
+      select: { image: true }
+    });
+    
+    if (!item) {
+      return res.status(404).json({ error: 'Menu item not found' });
+    }
+    
+    // Delete the item from database
     await prisma.menuItem.delete({
       where: { id }
     });
+    
+    // Delete from Cloudinary if it's a Cloudinary URL
+    if (item.image && item.image.includes('cloudinary.com')) {
+      try {
+        const cloudinary = require('cloudinary').v2;
+        // Extract public_id from Cloudinary URL
+        const urlParts = item.image.split('/');
+        const filename = urlParts[urlParts.length - 1].split('.')[0];
+        const folder = urlParts[urlParts.length - 2];
+        const publicId = `cosypos/${folder}/${filename}`;
+        
+        await cloudinary.uploader.destroy(publicId);
+        console.log('✅ Deleted from Cloudinary:', publicId);
+      } catch (cloudinaryError) {
+        console.warn('⚠️ Failed to delete from Cloudinary:', cloudinaryError.message);
+        // Don't fail the request if Cloudinary deletion fails
+      }
+    }
     
     // Clear cache when data changes
     cache.clearPattern('menu-items:');
@@ -515,10 +544,11 @@ router.delete('/menu-items/:id', requireAnyAuth(), async (req, res) => {
     res.json({ message: 'Menu item deleted successfully' });
   } catch (error) {
     console.error('Error deleting menu item:', error);
+    console.error('Error details:', error.message, error.stack);
     if (error.code === 'P2025') {
       res.status(404).json({ error: 'Menu item not found' });
     } else {
-      res.status(500).json({ error: 'Failed to delete menu item' });
+      res.status(500).json({ error: 'Failed to delete menu item', details: error.message });
     }
   }
 });
