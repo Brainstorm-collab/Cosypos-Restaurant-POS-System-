@@ -2,7 +2,9 @@
 
 # 🍽️ CosyPOS - Modern Restaurant Management System
 
-![CosyPOS Demo](frontend-deploy/public/demo-cosypos.png)
+![CosyPOS Demo Dashboard](https://raw.githubusercontent.com/yourusername/cosypos/main/cosypos-clean/frontend-deploy/public/demo-cosypos.png)
+
+> 🖼️ **Note:** Replace `yourusername` and `cosypos` in the image URL above with your actual GitHub username and repository name
 
 **A comprehensive, full-stack restaurant Point of Sale (POS) system with real-time synchronization, role-based access control, and modern UI/UX**
 
@@ -165,7 +167,7 @@ CosyPOS is a modern, feature-rich restaurant management system designed to strea
 <summary>Click to view screenshots</summary>
 
 #### Dashboard
-![Dashboard](frontend-deploy/public/demo-cosypos.png)
+![Dashboard](https://raw.githubusercontent.com/yourusername/cosypos/main/cosypos-clean/frontend-deploy/public/demo-cosypos.png)
 
 #### Menu Management
 *Screenshot coming soon*
@@ -194,18 +196,18 @@ Before you begin, ensure you have the following installed:
 
 #### 1️⃣ Clone the Repository
 
-```bash
+   ```bash
 git clone https://github.com/yourusername/cosypos.git
 cd cosypos/cosypos-clean
-```
+   ```
 
 #### 2️⃣ Backend Setup
 
-```bash
-cd backend-deploy
+   ```bash
+   cd backend-deploy
 
 # Install dependencies
-npm install
+   npm install
 
 # Create environment file
 cp .env.example .env
@@ -216,17 +218,17 @@ cp .env.example .env
 # PORT=4000
 
 # Generate Prisma Client
-npx prisma generate
+   npx prisma generate
 
 # Push database schema
-npx prisma db push
+   npx prisma db push
 
 # Seed the database with initial data
-npm run seed
+   npm run seed
 
 # Start backend server
-npm run dev
-```
+   npm run dev
+   ```
 
 Backend will run on `http://localhost:4000`
 
@@ -234,11 +236,11 @@ Backend will run on `http://localhost:4000`
 
 Open a new terminal:
 
-```bash
-cd frontend-deploy
+   ```bash
+   cd frontend-deploy
 
 # Install dependencies
-npm install
+   npm install
 
 # Create environment file
 cp .env.example .env
@@ -247,8 +249,8 @@ cp .env.example .env
 # VITE_API_URL=http://localhost:4000
 
 # Start frontend dev server
-npm run dev
-```
+   npm run dev
+   ```
 
 Frontend will run on `http://localhost:5173`
 
@@ -558,15 +560,15 @@ Content-Type: application/json
      ```bash
      npm start
      ```
-   - **Node Version:** 22.16.0
+- **Node Version:** 22.16.0
 
 4. **Add Environment Variables:**
-   ```
+```
    DATABASE_URL=<your-postgresql-url>
    JWT_SECRET=<your-secret-key>
-   NODE_ENV=production
-   PORT=4000
-   ```
+NODE_ENV=production
+PORT=4000
+```
 
 #### Frontend Deployment
 

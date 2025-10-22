@@ -467,3 +467,4 @@ For advanced configuration and features, check out the [README.md](README.md) an
 
 **Made with ❤️ by the CosyPOS Team**
 
+
