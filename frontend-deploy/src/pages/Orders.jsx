@@ -512,10 +512,15 @@ export default function Orders() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [ordersData, menuItemsData] = await Promise.all([
-          getOrders(),
-          getMenuItems()
+        const [ordersResponse, menuItemsResponse] = await Promise.all([
+          getOrders({ page: 1, limit: 100 }), // Use pagination for faster loading
+          getMenuItems({ page: 1, limit: 100 })
         ]);
+        
+        // Handle both paginated and non-paginated response
+        const ordersData = ordersResponse.items || ordersResponse;
+        const menuItemsData = menuItemsResponse.items || menuItemsResponse;
+        
         setOrders(ordersData);
         setMenuItems(menuItemsData);
       } catch (error) {
@@ -541,7 +546,8 @@ export default function Orders() {
         const ordersData = await getOrders();
         setOrders(ordersData);
         
-        const menuItemsData = await getMenuItems();
+        const menuItemsResponse = await getMenuItems({ page: 1, limit: 100 }); // Use pagination
+        const menuItemsData = menuItemsResponse.items || menuItemsResponse; // Handle both formats
         setMenuItems(menuItemsData);
       } catch (error) {
         console.error('Error refreshing orders data:', error);

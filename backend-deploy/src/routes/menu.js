@@ -211,22 +211,33 @@ router.delete('/categories/:id', requireAnyAuth(), async (req, res) => {
   }
 });
 
-// Get all menu items
+// Get all menu items (with pagination and optimization)
 router.get('/menu-items', etagMiddleware, async (req, res) => {
   try {
-    // Check cache first
-    const cacheKey = 'menu-items:all';
+    // Parse pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 100; // Default 100 items per page
+    const skip = (page - 1) * limit;
+    const noPagination = req.query.all === 'true'; // Option to get all items
+    
+    // Build cache key with pagination
+    const cacheKey = noPagination ? 'menu-items:all' : `menu-items:page:${page}:${limit}`;
     const cached = cache.get(cacheKey);
     if (cached) {
-      console.log('🚀 CACHE HIT! Returning cached menu items (instant)');
+      console.log(`🚀 CACHE HIT! Returning cached menu items (instant) - Page ${page}`);
       return res.json(cached);
     }
 
-    console.log('💾 CACHE MISS - Fetching from PostgreSQL (optimized query)...');
+    console.log(`💾 CACHE MISS - Fetching from PostgreSQL (optimized query) - Page ${page}...`);
     
     // Use deduplication to prevent stampeding herd
-    const menuItems = await deduplicator.deduplicate(cacheKey, async () => {
+    const result = await deduplicator.deduplicate(cacheKey, async () => {
       const startTime = Date.now();
+      
+      // Optimize: Only get count if we're paginating
+      const totalCount = noPagination ? null : await prisma.menuItem.count();
+      
+      // Fetch menu items with optimized query
       const data = await prisma.menuItem.findMany({
         select: {
           id: true,
@@ -243,14 +254,22 @@ router.get('/menu-items', etagMiddleware, async (req, res) => {
             }
           }
         },
-        orderBy: { name: 'asc' }
+        orderBy: { name: 'asc' },
+        ...(noPagination ? {} : { skip, take: limit })
       });
-      console.log(`⚡ PostgreSQL query took ${Date.now() - startTime}ms`);
-      return data;
+      
+      const queryTime = Date.now() - startTime;
+      console.log(`⚡ PostgreSQL query took ${queryTime}ms - Fetched ${data.length} items${noPagination ? ' (ALL)' : ''}`);
+      
+      if (queryTime > 1000) {
+        console.warn(`⚠️ SLOW QUERY WARNING: Query took ${queryTime}ms - Consider using pagination instead of ?all=true`);
+      }
+      
+      return { items: data, total: totalCount || data.length };
     });
     
     // Transform data to match frontend expectations
-    const transformedItems = menuItems.map(item => ({
+    const transformedItems = result.items.map(item => ({
       id: item.id,
       name: item.name,
       description: item.description || '',
@@ -265,17 +284,30 @@ router.get('/menu-items', etagMiddleware, async (req, res) => {
       active: item.available
     }));
     
+    // Prepare response with pagination metadata
+    const response = noPagination ? transformedItems : {
+      items: transformedItems,
+      pagination: {
+        page,
+        limit,
+        total: result.total,
+        totalPages: Math.ceil(result.total / limit),
+        hasMore: skip + transformedItems.length < result.total
+      }
+    };
+    
     // Cache for 5 MINUTES (increased from 30 seconds for better performance)
-    cache.set(cacheKey, transformedItems, 300000);
+    cache.set(cacheKey, response, 300000);
     console.log('✅ Stored in cache for 5 minutes');
     
     // Allow some caching on client side (5 seconds)
     res.set('Cache-Control', 'public, max-age=5');
     
-    res.json(transformedItems);
+    res.json(response);
   } catch (error) {
     console.error('Error fetching menu items:', error);
-    res.status(500).json({ error: 'Failed to fetch menu items' });
+    console.error('Error details:', error.message, error.stack);
+    res.status(500).json({ error: 'Failed to fetch menu items', details: error.message });
   }
 });
 

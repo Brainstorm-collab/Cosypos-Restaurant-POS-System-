@@ -4,19 +4,59 @@ const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs').promises;
 const compression = require('compression');
+const rateLimit = require('express-rate-limit');
+const { imageOptimizerMiddleware } = require('./middleware/image-optimizer');
 
 dotenv.config();
 const app = express();
 
+// Rate limiting to prevent API abuse and overload
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute window
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skip: (req) => {
+    // Skip rate limiting for static files
+    return req.path.startsWith('/uploads/');
+  }
+});
+
+// Stricter rate limit for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 login attempts per 15 minutes
+  message: 'Too many authentication attempts, please try again later.',
+  skipSuccessfulRequests: true // Don't count successful requests
+});
+
+// Apply rate limiting to all API routes
+app.use('/api', apiLimiter);
+
 // Performance middleware
-app.use(compression()); // Enable gzip compression
+app.use(compression({ 
+  level: 6, // Balance between compression and speed
+  threshold: 1024, // Only compress responses > 1KB
+  filter: (req, res) => {
+    // Don't compress images (already optimized)
+    if (res.getHeader('Content-Type')?.startsWith('image/')) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+})); // Enable gzip compression
+
+// Image optimization middleware
+app.use(imageOptimizerMiddleware);
 // CORS headers for all requests
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma, Expires');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma, Expires, If-None-Match, ETag');
   res.setHeader('Access-Control-Allow-Credentials', 'false');
   res.setHeader('Access-Control-Max-Age', '86400');
+  res.setHeader('Access-Control-Expose-Headers', 'ETag');
   
   // Override any restrictive CORS policies
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
@@ -162,8 +202,9 @@ if (process.env.NODE_ENV === 'development' || process.env.ENABLE_TEST_ENDPOINTS 
 app.options('/api/auth/login', (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma, Expires');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma, Expires, If-None-Match, ETag');
   res.setHeader('Access-Control-Allow-Credentials', 'false');
+  res.setHeader('Access-Control-Expose-Headers', 'ETag');
   res.status(200).end();
 });
 
@@ -171,8 +212,9 @@ app.options('/api/auth/register', (req, res) => {
   console.log('OPTIONS request for auth route');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma, Expires');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma, Expires, If-None-Match, ETag');
   res.setHeader('Access-Control-Allow-Credentials', 'false');
+  res.setHeader('Access-Control-Expose-Headers', 'ETag');
   res.status(200).end();
 });
 
@@ -180,8 +222,9 @@ app.options('/api/auth/register', (req, res) => {
 app.use('/api', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma, Expires');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma, Expires, If-None-Match, ETag');
   res.setHeader('Access-Control-Allow-Credentials', 'false');
+  res.setHeader('Access-Control-Expose-Headers', 'ETag');
   next();
 });
 
@@ -199,15 +242,15 @@ app.use((req, res, next) => {
   res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', '*');
-  res.setHeader('Access-Control-Expose-Headers', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma, Expires, If-None-Match, ETag');
+  res.setHeader('Access-Control-Expose-Headers', 'ETag, Content-Length, Content-Type');
   
   next();
 });
 
 // Load routes
 console.log('Loading routes...');
-app.use('/api/auth', require('./routes/auth'));
+app.use('/api/auth', authLimiter, require('./routes/auth'));
 console.log('Auth routes loaded');
 app.use('/api', require('./routes/upload'));
 console.log('Upload routes loaded');

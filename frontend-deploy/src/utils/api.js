@@ -1,16 +1,69 @@
 export async function login(email, password) {
   const base = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-  const r = await fetch(base + '/api/auth/login', {
-    method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache'
-    },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!r.ok) throw new Error('login failed');
-  return r.json();
+  
+  try {
+    const r = await fetch(base + '/api/auth/login', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      },
+      body: JSON.stringify({ email, password }),
+    });
+    
+    if (!r.ok) {
+      // Try to get error message from response
+      let errorMessage = 'Login failed';
+      try {
+        const errorData = await r.json();
+        errorMessage = errorData.error || errorData.message || errorMessage;
+      } catch (e) {
+        // If response is not JSON, use status-based messages
+        switch (r.status) {
+          case 401:
+            errorMessage = 'Invalid email or password';
+            break;
+          case 403:
+            errorMessage = 'Access denied';
+            break;
+          case 404:
+            errorMessage = 'Login service not found';
+            break;
+          case 500:
+            errorMessage = 'Server error. Please try again later';
+            break;
+          case 503:
+            errorMessage = 'Service unavailable. Please try again later';
+            break;
+          default:
+            errorMessage = `Login failed (Error ${r.status})`;
+        }
+      }
+      const error = new Error(errorMessage);
+      error.status = r.status;
+      throw error;
+    }
+    
+    return r.json();
+  } catch (error) {
+    // Handle network errors
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      const netError = new Error('Network error. Please check your internet connection');
+      netError.isNetworkError = true;
+      throw netError;
+    }
+    
+    // Handle timeout errors
+    if (error.name === 'AbortError') {
+      const timeoutError = new Error('Request timeout. Please try again');
+      timeoutError.isTimeout = true;
+      throw timeoutError;
+    }
+    
+    // Re-throw other errors
+    throw error;
+  }
 }
 
 export async function getCurrentUser() {
@@ -20,7 +73,7 @@ export async function getCurrentUser() {
   
   // Add timeout to prevent hanging
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+  const timeoutId = setTimeout(() => controller.abort('Request timeout'), 10000); // 10 second timeout
   
   try {
     const r = await fetch(base + '/api/auth/me', {
@@ -89,30 +142,66 @@ export async function uploadProfileImage(imageFile) {
 }
 
 // Order API functions
-export async function getOrders() {
+export async function getOrders(options = {}) {
   const base = import.meta.env.VITE_API_URL || 'http://localhost:4000';
   const token = localStorage.getItem('token');
   
+  // Support pagination
+  const { page, limit, all = true } = options;
+  
+  // Build query params
+  const params = new URLSearchParams();
+  if (all) {
+    params.append('all', 'true'); // Get all orders for backward compatibility
+  } else {
+    if (page) params.append('page', page);
+    if (limit) params.append('limit', limit);
+  }
+  
+  const queryString = params.toString();
+  const url = `${base}/api/orders${queryString ? '?' + queryString : ''}`;
+  
   const headers = {
     'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache'
+    // Use ETags for better caching
+    'If-None-Match': sessionStorage.getItem('orders-etag') || ''
   };
-  
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  
-  const r = await fetch(base + '/api/orders', {
+
+  const r = await fetch(url, {
     method: 'GET',
     headers
   });
   
+  // Handle 304 Not Modified
+  if (r.status === 304) {
+    const cached = sessionStorage.getItem('orders-cache');
+    if (cached) {
+      console.log('📦 Using cached orders (304 Not Modified)');
+      return JSON.parse(cached);
+    }
+  }
+
   if (!r.ok) {
-    const error = await r.json();
+    const error = await r.json().catch(() => ({ error: 'Failed to fetch orders' }));
     throw new Error(error.error || 'Failed to fetch orders');
   }
-  return r.json();
+  
+  // Save ETag for future requests
+  const etag = r.headers.get('ETag');
+  if (etag) {
+    sessionStorage.setItem('orders-etag', etag);
+  }
+  
+  const data = await r.json();
+  
+  // Cache the response
+  sessionStorage.setItem('orders-cache', JSON.stringify(data));
+  
+  return data;
 }
 
 export async function createOrder(orderData) {
@@ -189,30 +278,112 @@ export async function deleteOrder(orderId) {
   return r.json();
 }
 
-export async function getMenuItems() {
+export async function getMenuItems(options = {}) {
   const base = import.meta.env.VITE_API_URL || 'http://localhost:4000';
   const token = localStorage.getItem('token');
-
+  
+  // Support pagination and optimization options
+  // Default to pagination for better performance
+  const { page = 1, limit = 50, all = false } = options;
+  
+  // Build query params
+  const params = new URLSearchParams();
+  if (all) {
+    params.append('all', 'true'); // Get all items only when explicitly requested
+  } else {
+    params.append('page', page);
+    params.append('limit', limit);
+  }
+  
+  const queryString = params.toString();
+  const url = `${base}/api/menu-items${queryString ? '?' + queryString : ''}`;
+  
   const headers = {
     'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache'
+    // Use ETags for better caching
+    'If-None-Match': sessionStorage.getItem('menu-items-etag') || ''
   };
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const r = await fetch(base + '/api/menu-items', {
+  const r = await fetch(url, {
     method: 'GET',
     headers
   });
+  
+  // Handle 304 Not Modified (cached response)
+  if (r.status === 304) {
+    const cached = sessionStorage.getItem('menu-items-cache');
+    if (cached) {
+      console.log('📦 Using cached menu items (304 Not Modified)');
+      return JSON.parse(cached);
+    }
+  }
 
   if (!r.ok) {
-    const error = await r.json();
+    const error = await r.json().catch(() => ({ error: 'Failed to fetch menu items' }));
     throw new Error(error.error || 'Failed to fetch menu items');
   }
-  return r.json();
+  
+  // Save ETag for future requests
+  const etag = r.headers.get('ETag');
+  if (etag) {
+    sessionStorage.setItem('menu-items-etag', etag);
+  }
+  
+  const data = await r.json();
+  
+  // Cache the response
+  sessionStorage.setItem('menu-items-cache', JSON.stringify(data));
+  
+  // Handle both paginated and non-paginated responses
+  // If response has 'items' property, it's paginated
+  // For backward compatibility, if 'all=true' was used, return flat array
+  if (all && Array.isArray(data)) {
+    return data;
+  }
+  
+  return data;
+}
+
+/**
+ * Get ALL menu items (loads all pages automatically)
+ * This is smart - it loads first page fast, then loads rest in background
+ */
+export async function getAllMenuItems() {
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  const token = localStorage.getItem('token');
+  
+  // First, get the first page quickly
+  const firstPage = await getMenuItems({ page: 1, limit: 50 });
+  
+  // If it's a flat array (old API), return it
+  if (Array.isArray(firstPage)) {
+    return firstPage;
+  }
+  
+  // If we have all items in first page, return them
+  if (!firstPage.pagination || !firstPage.pagination.hasMore) {
+    return firstPage.items;
+  }
+  
+  // Load remaining pages in parallel
+  const totalPages = firstPage.pagination.totalPages;
+  const remainingPages = [];
+  
+  for (let page = 2; page <= Math.min(totalPages, 10); page++) {
+    remainingPages.push(getMenuItems({ page, limit: 50 }));
+  }
+  
+  const restOfPages = await Promise.all(remainingPages);
+  const allItems = [
+    ...firstPage.items,
+    ...restOfPages.flatMap(pageData => pageData.items || [])
+  ];
+  
+  return allItems;
 }
 
 export async function updateMenuItem(menuItemId, menuItemData) {
@@ -312,8 +483,8 @@ export async function getCategories() {
   
   const headers = {
     'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache'
+    // Use ETags for better caching
+    'If-None-Match': sessionStorage.getItem('categories-etag') || ''
   };
   
   if (token) {
@@ -325,11 +496,32 @@ export async function getCategories() {
     headers
   });
   
+  // Handle 304 Not Modified
+  if (r.status === 304) {
+    const cached = sessionStorage.getItem('categories-cache');
+    if (cached) {
+      console.log('📦 Using cached categories (304 Not Modified)');
+      return JSON.parse(cached);
+    }
+  }
+  
   if (!r.ok) {
-    const error = await r.json();
+    const error = await r.json().catch(() => ({ error: 'Failed to fetch categories' }));
     throw new Error(error.error || 'Failed to fetch categories');
   }
-  return r.json();
+  
+  // Save ETag for future requests
+  const etag = r.headers.get('ETag');
+  if (etag) {
+    sessionStorage.setItem('categories-etag', etag);
+  }
+  
+  const data = await r.json();
+  
+  // Cache the response
+  sessionStorage.setItem('categories-cache', JSON.stringify(data));
+  
+  return data;
 }
 
 export async function createCategory(categoryData) {
@@ -755,4 +947,62 @@ export async function getOutOfStockItems() {
     throw new Error(error.error || 'Failed to fetch out of stock items');
   }
   return r.json();
+}
+
+// ============================================================================
+// Image Optimization Utilities
+// ============================================================================
+
+/**
+ * Get optimized image URL with size parameter
+ * @param {string} imagePath - The image path from API (e.g., /uploads/menu-items/...)
+ * @param {string} size - Size preset: 'thumbnail', 'small', 'medium', 'large', 'original'
+ * @returns {string} Optimized image URL
+ */
+export function getOptimizedImageUrl(imagePath, size = 'medium') {
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  
+  if (!imagePath) {
+    return '/placeholder-food.jpg'; // Default placeholder
+  }
+  
+  // If it's already a full URL, return as is
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  
+  // If it's a local asset, return as is
+  if (imagePath.startsWith('/') && !imagePath.startsWith('/uploads')) {
+    return imagePath;
+  }
+  
+  // Build optimized URL with size parameter
+  const fullUrl = imagePath.startsWith('/') ? `${base}${imagePath}` : `${base}/${imagePath}`;
+  return `${fullUrl}?size=${size}`;
+}
+
+/**
+ * Preload an image to improve perceived performance
+ * @param {string} imageUrl - The image URL to preload
+ */
+export function preloadImage(imageUrl) {
+  const img = new Image();
+  img.src = imageUrl;
+}
+
+/**
+ * Clear all API caches (useful after logout or data changes)
+ */
+export function clearApiCache() {
+  const cacheKeys = [
+    'menu-items-cache',
+    'menu-items-etag',
+    'orders-cache',
+    'orders-etag',
+    'categories-cache',
+    'categories-etag'
+  ];
+  
+  cacheKeys.forEach(key => sessionStorage.removeItem(key));
+  console.log('🗑️ API cache cleared');
 }

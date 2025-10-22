@@ -92,7 +92,8 @@ export default function Inventory() {
           }
         }, 45000);
         
-        const items = await getMenuItems();
+        const response = await getMenuItems({ page: 1, limit: 100 }); // Use pagination for faster loading
+        const items = response.items || response; // Handle both formats
         
         if (mounted) {
           setInventoryItems(items);
@@ -127,7 +128,8 @@ export default function Inventory() {
     const handleRealtimeRefresh = async () => {
       console.log('🔄 Inventory page real-time refresh triggered');
       try {
-        const items = await getMenuItems();
+        const response = await getMenuItems({ page: 1, limit: 100 }); // Use pagination
+        const items = response.items || response; // Handle both formats
         setInventoryItems(items);
       } catch (error) {
         console.error('Error refreshing inventory data:', error);
@@ -491,9 +493,9 @@ export default function Inventory() {
     >
       <div style={{
         background: colors.panel,
-        borderRadius: 12,
-        padding: 24,
-        maxWidth: 600,
+        borderRadius: 10,
+        padding: 20,
+        maxWidth: 520,
         width: '90%',
         maxHeight: '90vh',
         overflow: 'hidden',
@@ -506,11 +508,11 @@ export default function Inventory() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: 24
+          marginBottom: 16
         }}>
           <h2 style={{
             color: colors.text,
-            fontSize: 20,
+            fontSize: 18,
             fontWeight: 600,
             margin: 0
           }}>
@@ -522,7 +524,7 @@ export default function Inventory() {
               background: 'transparent',
               border: 'none',
               color: colors.muted,
-              fontSize: 24,
+              fontSize: 22,
               cursor: 'pointer',
               padding: 4,
               borderRadius: 4
@@ -535,17 +537,17 @@ export default function Inventory() {
         </div>
 
         {/* Image Upload */}
-        <div style={{ marginBottom: 24, textAlign: 'center' }}>
+        <div style={{ marginBottom: 16, textAlign: 'center' }}>
           <div style={{
-            width: 120,
-            height: 120,
+            width: 100,
+            height: 100,
             background: colors.bg,
             border: `2px dashed ${colors.muted}`,
             borderRadius: 8,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            margin: '0 auto 12px',
+            margin: '0 auto 10px',
             cursor: 'pointer',
             overflow: 'hidden',
             position: 'relative'
@@ -564,7 +566,7 @@ export default function Inventory() {
                 }}
               />
             ) : (
-              <FiPlus size={32} color={colors.muted} />
+              <FiPlus size={28} color={colors.muted} />
             )}
           </div>
           <input
@@ -581,7 +583,7 @@ export default function Inventory() {
               background: 'transparent',
               border: 'none',
               color: colors.accent,
-              fontSize: 14,
+              fontSize: 13,
               cursor: 'pointer',
               textDecoration: 'underline'
             }}
@@ -594,8 +596,8 @@ export default function Inventory() {
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
-          gap: 16,
-          marginBottom: 24,
+          gap: 12,
+          marginBottom: 16,
           maxWidth: '100%',
           overflow: 'hidden'
         }}>
@@ -603,9 +605,9 @@ export default function Inventory() {
           <div style={{ minWidth: 0 }}>
             <label style={{
               color: colors.text,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 500,
-              marginBottom: 8,
+              marginBottom: 6,
               display: 'block'
             }}>
               Name
@@ -618,12 +620,12 @@ export default function Inventory() {
               style={{
                 width: '100%',
                 maxWidth: '100%',
-                padding: 12,
+                padding: 10,
                 background: colors.bg,
                 border: `1px solid ${colors.muted}`,
                 borderRadius: 6,
                 color: colors.text,
-                fontSize: 14,
+                fontSize: 13,
                 outline: 'none',
                 boxSizing: 'border-box'
               }}
@@ -634,9 +636,9 @@ export default function Inventory() {
           <div style={{ minWidth: 0 }}>
             <label style={{
               color: colors.text,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 500,
-              marginBottom: 8,
+              marginBottom: 6,
               display: 'block'
             }}>
               Category
@@ -647,12 +649,12 @@ export default function Inventory() {
               style={{
                 width: '100%',
                 maxWidth: '100%',
-                padding: 12,
+                padding: 10,
                 background: colors.bg,
                 border: `1px solid ${colors.muted}`,
                 borderRadius: 6,
                 color: colors.text,
-                fontSize: 14,
+                fontSize: 13,
                 outline: 'none',
                 boxSizing: 'border-box'
               }}
@@ -668,9 +670,9 @@ export default function Inventory() {
           <div style={{ minWidth: 0 }}>
             <label style={{
               color: colors.text,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 500,
-              marginBottom: 8,
+              marginBottom: 6,
               display: 'block'
             }}>
               Quantity
@@ -681,12 +683,12 @@ export default function Inventory() {
               style={{
                 width: '100%',
                 maxWidth: '100%',
-                padding: 12,
+                padding: 10,
                 background: colors.bg,
                 border: `1px solid ${colors.muted}`,
                 borderRadius: 6,
                 color: colors.text,
-                fontSize: 14,
+                fontSize: 13,
                 outline: 'none',
                 boxSizing: 'border-box'
               }}
@@ -701,9 +703,9 @@ export default function Inventory() {
           <div style={{ minWidth: 0 }}>
             <label style={{
               color: colors.text,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 500,
-              marginBottom: 8,
+              marginBottom: 6,
               display: 'block'
             }}>
               Stock
@@ -714,12 +716,12 @@ export default function Inventory() {
               style={{
                 width: '100%',
                 maxWidth: '100%',
-                padding: 12,
+                padding: 10,
                 background: colors.bg,
                 border: `1px solid ${colors.muted}`,
                 borderRadius: 6,
                 color: colors.text,
-                fontSize: 14,
+                fontSize: 13,
                 outline: 'none',
                 boxSizing: 'border-box'
               }}
@@ -734,9 +736,9 @@ export default function Inventory() {
           <div style={{ minWidth: 0 }}>
             <label style={{
               color: colors.text,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 500,
-              marginBottom: 8,
+              marginBottom: 6,
               display: 'block'
             }}>
               Status
@@ -747,12 +749,12 @@ export default function Inventory() {
               style={{
                 width: '100%',
                 maxWidth: '100%',
-                padding: 12,
+                padding: 10,
                 background: colors.bg,
                 border: `1px solid ${colors.muted}`,
                 borderRadius: 6,
                 color: colors.text,
-                fontSize: 14,
+                fontSize: 13,
                 outline: 'none',
                 boxSizing: 'border-box'
               }}
@@ -767,9 +769,9 @@ export default function Inventory() {
           <div style={{ minWidth: 0 }}>
             <label style={{
               color: colors.text,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 500,
-              marginBottom: 8,
+              marginBottom: 6,
               display: 'block'
             }}>
               Price
@@ -783,12 +785,12 @@ export default function Inventory() {
               style={{
                 width: '100%',
                 maxWidth: '100%',
-                padding: 12,
+                padding: 10,
                 background: colors.bg,
                 border: `1px solid ${colors.muted}`,
                 borderRadius: 6,
                 color: colors.text,
-                fontSize: 14,
+                fontSize: 13,
                 outline: 'none',
                 boxSizing: 'border-box'
               }}
@@ -797,18 +799,18 @@ export default function Inventory() {
         </div>
 
         {/* Perishable */}
-        <div style={{ marginBottom: 24 }}>
+        <div style={{ marginBottom: 16 }}>
           <label style={{
             color: colors.text,
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: 500,
-            marginBottom: 12,
+            marginBottom: 8,
             display: 'block'
           }}>
             Perishable
           </label>
-          <div style={{ display: 'flex', gap: 16 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
               <input
                 type="radio"
                 name="perishable"
@@ -817,9 +819,9 @@ export default function Inventory() {
                 onChange={(e) => handleFormChange('perishable', e.target.value)}
                 style={{ accentColor: colors.accent }}
               />
-              <span style={{ color: colors.text, fontSize: 14 }}>Yes</span>
+              <span style={{ color: colors.text, fontSize: 13 }}>Yes</span>
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
               <input
                 type="radio"
                 name="perishable"
@@ -828,7 +830,7 @@ export default function Inventory() {
                 onChange={(e) => handleFormChange('perishable', e.target.value)}
                 style={{ accentColor: colors.accent }}
               />
-              <span style={{ color: colors.text, fontSize: 14 }}>No</span>
+              <span style={{ color: colors.text, fontSize: 13 }}>No</span>
             </label>
           </div>
         </div>
@@ -836,7 +838,7 @@ export default function Inventory() {
         {/* Buttons */}
         <div style={{
           display: 'flex',
-          gap: 12,
+          gap: 10,
           justifyContent: 'flex-end'
         }}>
           <button
@@ -845,9 +847,9 @@ export default function Inventory() {
               background: 'transparent',
               border: `1px solid ${colors.muted}`,
               color: colors.text,
-              padding: '12px 24px',
+              padding: '10px 20px',
               borderRadius: 6,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 500,
               cursor: 'pointer',
               transition: 'all 0.2s ease'
@@ -870,9 +872,9 @@ export default function Inventory() {
               background: isSaving ? colors.muted : colors.accent,
               border: 'none',
               color: isSaving ? '#555' : '#333333',
-              padding: '12px 24px',
+              padding: '10px 20px',
               borderRadius: 6,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 600,
               cursor: isSaving ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s ease',
@@ -914,9 +916,9 @@ export default function Inventory() {
     >
       <div style={{
         background: colors.panel,
-        borderRadius: 12,
-        padding: 24,
-        maxWidth: 600,
+        borderRadius: 10,
+        padding: 20,
+        maxWidth: 520,
         width: '90%',
         maxHeight: '90vh',
         overflow: 'hidden',
@@ -929,11 +931,11 @@ export default function Inventory() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: 24
+          marginBottom: 16
         }}>
           <h2 style={{
             color: colors.text,
-            fontSize: 20,
+            fontSize: 18,
             fontWeight: 600,
             margin: 0
           }}>
@@ -945,7 +947,7 @@ export default function Inventory() {
               background: 'transparent',
               border: 'none',
               color: colors.muted,
-              fontSize: 24,
+              fontSize: 22,
               cursor: 'pointer',
               padding: 4,
               borderRadius: 4
@@ -958,16 +960,16 @@ export default function Inventory() {
         </div>
 
         {/* Image Display */}
-        <div style={{ marginBottom: 24, textAlign: 'center' }}>
+        <div style={{ marginBottom: 16, textAlign: 'center' }}>
           <div style={{
-            width: 120,
-            height: 120,
+            width: 100,
+            height: 100,
             background: colors.bg,
             borderRadius: 8,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            margin: '0 auto 12px',
+            margin: '0 auto 10px',
             overflow: 'hidden',
             cursor: 'pointer',
             position: 'relative'
@@ -1008,12 +1010,12 @@ export default function Inventory() {
               background: 'transparent',
               border: 'none',
               color: colors.accent,
-              fontSize: 14,
+              fontSize: 13,
               cursor: 'pointer',
               textDecoration: 'underline'
             }}
           >
-            Change Profile Picture
+            Change Picture
           </button>
         </div>
 
@@ -1021,16 +1023,16 @@ export default function Inventory() {
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
-          gap: 16,
-          marginBottom: 24
+          gap: 12,
+          marginBottom: 16
         }}>
           {/* Name */}
           <div style={{ minWidth: 0 }}>
             <label style={{
               color: colors.text,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 500,
-              marginBottom: 8,
+              marginBottom: 6,
               display: 'block'
             }}>
               Name
@@ -1042,12 +1044,12 @@ export default function Inventory() {
               style={{
                 width: '100%',
                 maxWidth: '100%',
-                padding: 12,
+                padding: 10,
                 background: colors.bg,
                 border: `1px solid ${colors.muted}`,
                 borderRadius: 6,
                 color: colors.text,
-                fontSize: 14,
+                fontSize: 13,
                 outline: 'none',
                 boxSizing: 'border-box'
               }}
@@ -1058,9 +1060,9 @@ export default function Inventory() {
           <div style={{ minWidth: 0 }}>
             <label style={{
               color: colors.text,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 500,
-              marginBottom: 8,
+              marginBottom: 6,
               display: 'block'
             }}>
               Category
@@ -1071,12 +1073,12 @@ export default function Inventory() {
               style={{
                 width: '100%',
                 maxWidth: '100%',
-                padding: 12,
+                padding: 10,
                 background: colors.bg,
                 border: `1px solid ${colors.muted}`,
                 borderRadius: 6,
                 color: colors.text,
-                fontSize: 14,
+                fontSize: 13,
                 outline: 'none',
                 boxSizing: 'border-box'
               }}
@@ -1092,9 +1094,9 @@ export default function Inventory() {
           <div style={{ minWidth: 0 }}>
             <label style={{
               color: colors.text,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 500,
-              marginBottom: 8,
+              marginBottom: 6,
               display: 'block'
             }}>
               Quantity
@@ -1105,12 +1107,12 @@ export default function Inventory() {
               style={{
                 width: '100%',
                 maxWidth: '100%',
-                padding: 12,
+                padding: 10,
                 background: colors.bg,
                 border: `1px solid ${colors.muted}`,
                 borderRadius: 6,
                 color: colors.text,
-                fontSize: 14,
+                fontSize: 13,
                 outline: 'none',
                 boxSizing: 'border-box'
               }}
@@ -1125,9 +1127,9 @@ export default function Inventory() {
           <div style={{ minWidth: 0 }}>
             <label style={{
               color: colors.text,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 500,
-              marginBottom: 8,
+              marginBottom: 6,
               display: 'block'
             }}>
               Stock
@@ -1138,12 +1140,12 @@ export default function Inventory() {
               style={{
                 width: '100%',
                 maxWidth: '100%',
-                padding: 12,
+                padding: 10,
                 background: colors.bg,
                 border: `1px solid ${colors.muted}`,
                 borderRadius: 6,
                 color: colors.text,
-                fontSize: 14,
+                fontSize: 13,
                 outline: 'none',
                 boxSizing: 'border-box'
               }}
@@ -1158,9 +1160,9 @@ export default function Inventory() {
           <div style={{ minWidth: 0 }}>
             <label style={{
               color: colors.text,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 500,
-              marginBottom: 8,
+              marginBottom: 6,
               display: 'block'
             }}>
               Status
@@ -1171,12 +1173,12 @@ export default function Inventory() {
               style={{
                 width: '100%',
                 maxWidth: '100%',
-                padding: 12,
+                padding: 10,
                 background: colors.bg,
                 border: `1px solid ${colors.muted}`,
                 borderRadius: 6,
                 color: colors.text,
-                fontSize: 14,
+                fontSize: 13,
                 outline: 'none',
                 boxSizing: 'border-box'
               }}
@@ -1191,9 +1193,9 @@ export default function Inventory() {
           <div style={{ minWidth: 0 }}>
             <label style={{
               color: colors.text,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 500,
-              marginBottom: 8,
+              marginBottom: 6,
               display: 'block'
             }}>
               Price
@@ -1206,12 +1208,12 @@ export default function Inventory() {
               style={{
                 width: '100%',
                 maxWidth: '100%',
-                padding: 12,
+                padding: 10,
                 background: colors.bg,
                 border: `1px solid ${colors.muted}`,
                 borderRadius: 6,
                 color: colors.text,
-                fontSize: 14,
+                fontSize: 13,
                 outline: 'none',
                 boxSizing: 'border-box'
               }}
@@ -1220,18 +1222,18 @@ export default function Inventory() {
         </div>
 
         {/* Perishable */}
-        <div style={{ marginBottom: 24 }}>
+        <div style={{ marginBottom: 16 }}>
           <label style={{
             color: colors.text,
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: 500,
-            marginBottom: 12,
+            marginBottom: 8,
             display: 'block'
           }}>
             Perishable
           </label>
-          <div style={{ display: 'flex', gap: 16 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
               <input
                 type="radio"
                 name="perishable"
@@ -1240,9 +1242,9 @@ export default function Inventory() {
                 onChange={(e) => handleFormChange('perishable', e.target.value)}
                 style={{ accentColor: colors.accent }}
               />
-              <span style={{ color: colors.text, fontSize: 14 }}>Yes</span>
+              <span style={{ color: colors.text, fontSize: 13 }}>Yes</span>
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
               <input
                 type="radio"
                 name="perishable"
@@ -1251,7 +1253,7 @@ export default function Inventory() {
                 onChange={(e) => handleFormChange('perishable', e.target.value)}
                 style={{ accentColor: colors.accent }}
               />
-              <span style={{ color: colors.text, fontSize: 14 }}>No</span>
+              <span style={{ color: colors.text, fontSize: 13 }}>No</span>
             </label>
           </div>
         </div>
@@ -1259,7 +1261,7 @@ export default function Inventory() {
         {/* Buttons */}
         <div style={{
           display: 'flex',
-          gap: 12,
+          gap: 10,
           justifyContent: 'flex-end'
         }}>
           <button
@@ -1268,9 +1270,9 @@ export default function Inventory() {
               background: 'transparent',
               border: `1px solid ${colors.muted}`,
               color: colors.text,
-              padding: '12px 24px',
+              padding: '10px 20px',
               borderRadius: 6,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 500,
               cursor: 'pointer',
               transition: 'all 0.2s ease'
@@ -1293,9 +1295,9 @@ export default function Inventory() {
               background: isSaving ? colors.muted : colors.accent,
               border: 'none',
               color: isSaving ? '#555' : '#333333',
-              padding: '12px 24px',
+              padding: '10px 20px',
               borderRadius: 6,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 600,
               cursor: isSaving ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s ease',

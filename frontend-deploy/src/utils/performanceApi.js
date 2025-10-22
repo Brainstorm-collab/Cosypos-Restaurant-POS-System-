@@ -106,7 +106,7 @@ class PerformanceAPI {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+      const timeoutId = setTimeout(() => controller.abort('Request timeout'), this.timeout);
 
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${url}`, {
         ...options,
@@ -126,7 +126,8 @@ class PerformanceAPI {
     } catch (error) {
       console.error(`Request failed (attempt ${retries + 1}):`, error);
 
-      if (retries < this.maxRetries && !error.name === 'AbortError') {
+      // Don't retry on abort errors (timeout or user cancellation)
+      if (retries < this.maxRetries && error.name !== 'AbortError') {
         // Exponential backoff
         const delay = Math.pow(2, retries) * 1000;
         this.retryCount.set(id, retries + 1);

@@ -2,13 +2,24 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { login } from '../utils/api';
 import { useUser } from './UserContext';
+import Toast from '../components/Toast';
+import { FiEye, FiEyeOff } from 'react-icons/fi';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [msg, setMsg] = useState('');
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const navigate = useNavigate();
   const { updateUser } = useUser();
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast({ show: false, message: '', type: 'success' });
+    }, 3000);
+  };
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -17,10 +28,38 @@ export default function Login() {
       const res = await login(email, password);
       localStorage.setItem('token', res.token);
       updateUser(res.user);
-      setMsg('Logged in as ' + res.user.role);
-      setTimeout(() => navigate('/dashboard'), 300);
-    } catch (e) {
-      setMsg(e.message || 'Error');
+      setMsg('');
+      showToast(`Successfully logged in as ${res.user.role}!`, 'success');
+      setTimeout(() => navigate('/dashboard'), 800);
+    } catch (error) {
+      setMsg('');
+      
+      // Show specific error message based on error type
+      let errorMessage = error.message || 'An unexpected error occurred';
+      let errorType = 'error';
+      
+      // Network error
+      if (error.isNetworkError) {
+        errorType = 'error';
+        errorMessage = '🌐 ' + errorMessage;
+      } 
+      // Timeout error
+      else if (error.isTimeout) {
+        errorType = 'warning';
+        errorMessage = '⏱️ ' + errorMessage;
+      }
+      // Authentication error (wrong credentials)
+      else if (error.status === 401) {
+        errorType = 'error';
+        errorMessage = '🔒 ' + errorMessage;
+      }
+      // Server error
+      else if (error.status >= 500) {
+        errorType = 'error';
+        errorMessage = '⚠️ ' + errorMessage;
+      }
+      
+      showToast(errorMessage, errorType);
     }
   }
 
@@ -53,10 +92,38 @@ export default function Login() {
       const res = await login(credentials.email, credentials.password);
       localStorage.setItem('token', res.token);
       updateUser(res.user);
-      setMsg('Logged in as ' + res.user.role);
-      setTimeout(() => navigate('/dashboard'), 300);
-    } catch (e) {
-      setMsg('Error logging in as ' + role + ': ' + (e.message || 'Invalid credentials'));
+      setMsg('');
+      showToast(`Successfully logged in as ${res.user.role}!`, 'success');
+      setTimeout(() => navigate('/dashboard'), 800);
+    } catch (error) {
+      setMsg('');
+      
+      // Show specific error message based on error type
+      let errorMessage = error.message || 'An unexpected error occurred';
+      let errorType = 'error';
+      
+      // Network error
+      if (error.isNetworkError) {
+        errorType = 'error';
+        errorMessage = '🌐 ' + errorMessage;
+      } 
+      // Timeout error
+      else if (error.isTimeout) {
+        errorType = 'warning';
+        errorMessage = '⏱️ ' + errorMessage;
+      }
+      // Authentication error (wrong credentials)
+      else if (error.status === 401) {
+        errorType = 'error';
+        errorMessage = '🔒 ' + errorMessage;
+      }
+      // Server error
+      else if (error.status >= 500) {
+        errorType = 'error';
+        errorMessage = '⚠️ ' + errorMessage;
+      }
+      
+      showToast(errorMessage, errorType);
     }
   }
 
@@ -146,22 +213,47 @@ export default function Login() {
               fontWeight: 500,
               fontSize: 'clamp(14px, 3vw, 16px)'
             }}>Password</div>
-            <input 
-              type="password" 
-              placeholder="Enter your password" 
-              value={password} 
-              onChange={e => setPassword(e.target.value)} 
-              style={{ 
-                width: '100%', 
-                padding: 14, 
-                borderRadius: 10, 
-                border: 'none', 
-                background: '#3D4142', 
-                color: '#fff',
-                fontSize: 'clamp(14px, 3vw, 16px)',
-                minHeight: 44
-              }} 
-            />
+            <div style={{ position: 'relative' }}>
+              <input 
+                type={showPassword ? "text" : "password"} 
+                placeholder="Enter your password" 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                style={{ 
+                  width: '100%', 
+                  padding: '14px 44px 14px 14px', 
+                  borderRadius: 10, 
+                  border: 'none', 
+                  background: '#3D4142', 
+                  color: '#fff',
+                  fontSize: 'clamp(14px, 3vw, 16px)',
+                  minHeight: 44
+                }} 
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: 12,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#FAC1D9',
+                  cursor: 'pointer',
+                  padding: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.target.style.color = '#E8A8C8'}
+                onMouseLeave={(e) => e.target.style.color = '#FAC1D9'}
+              >
+                {showPassword ? <FiEyeOff size={20} /> : <FiEye size={20} />}
+              </button>
+            </div>
           </div>
           <div style={{ 
             display: 'flex', 
@@ -288,6 +380,14 @@ export default function Login() {
           textAlign: 'center'
         }}>{msg}</div>
       </div>
+
+      {/* Toast Notification */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ show: false, message: '', type: 'success' })}
+      />
     </div>
   );
 }

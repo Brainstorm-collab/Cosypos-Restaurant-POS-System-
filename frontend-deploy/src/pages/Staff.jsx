@@ -123,12 +123,20 @@ function Header({ onAdd, count, activeTab, setActiveTab, sortBy, sortOrder, onSo
 
         </>
       )} />
-      <div className="page-main-content" style={{ marginTop: 30, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 0, paddingBottom: 0 }}>
-        <div style={{ fontSize: 25, fontWeight: 500 }}>Staff ({count})</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div className="page-main-content" style={{ marginTop: 30, paddingTop: 0, paddingBottom: 0 }}>
+        <div style={{ 
+          maxWidth: '1100px', 
+          margin: '0 auto', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          padding: '0 20px'
+        }}>
+          <div style={{ fontSize: 25, fontWeight: 500 }}>Staff ({count})</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {/* Only show Add Staff button for ADMIN users */}
           {user?.role === 'ADMIN' && (
-            <button onClick={onAdd} style={{ background: colors.accent, color: '#333', border: 'none', padding: '14px 22px', borderRadius: 7, fontWeight: 500 }}>Add Staff</button>
+            <button onClick={onAdd} style={{ background: colors.accent, color: '#333', border: 'none', padding: '14px 22px', borderRadius: 7, fontWeight: 500, cursor: 'pointer' }}>Add Staff</button>
           )}
           <div style={{ position: 'relative' }}>
             <button 
@@ -231,29 +239,22 @@ function Header({ onAdd, count, activeTab, setActiveTab, sortBy, sortOrder, onSo
             )}
           </div>
         </div>
+        </div>
       </div>
-      <div className="page-main-content" style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 35, paddingTop: 0, paddingBottom: 0 }}>
-        <button 
-          onClick={() => setActiveTab('management')} 
-          style={{ 
-            background: activeTab === 'management' ? colors.accent : 'transparent', 
-            color: activeTab === 'management' ? '#333' : '#fff', 
-            border: 'none', 
-            fontWeight: 500,
-            padding: '14px 22px',
-            borderRadius: 7,
-            cursor: 'pointer'
-          }}
-        >
-          Staff Management
-        </button>
-        {/* Only show Attendance tab for ADMIN users */}
-        {user?.role === 'ADMIN' && (
+      <div className="page-main-content" style={{ marginTop: 16, paddingTop: 0, paddingBottom: 0 }}>
+        <div style={{ 
+          maxWidth: '1100px', 
+          margin: '0 auto', 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 35,
+          padding: '0 20px'
+        }}>
           <button 
-            onClick={() => setActiveTab('attendance')} 
+            onClick={() => setActiveTab('management')} 
             style={{ 
-              background: activeTab === 'attendance' ? colors.accent : 'transparent', 
-              color: activeTab === 'attendance' ? '#333' : '#fff', 
+              background: activeTab === 'management' ? colors.accent : 'transparent', 
+              color: activeTab === 'management' ? '#333' : '#fff', 
               border: 'none', 
               fontWeight: 500,
               padding: '14px 22px',
@@ -261,9 +262,26 @@ function Header({ onAdd, count, activeTab, setActiveTab, sortBy, sortOrder, onSo
               cursor: 'pointer'
             }}
           >
-            Attendance
+            Staff Management
           </button>
-        )}
+          {/* Only show Attendance tab for ADMIN users */}
+          {user?.role === 'ADMIN' && (
+            <button 
+              onClick={() => setActiveTab('attendance')} 
+              style={{ 
+                background: activeTab === 'attendance' ? colors.accent : 'transparent', 
+                color: activeTab === 'attendance' ? '#333' : '#fff', 
+                border: 'none', 
+                fontWeight: 500,
+                padding: '14px 22px',
+                borderRadius: 7,
+                cursor: 'pointer'
+              }}
+            >
+              Attendance
+            </button>
+          )}
+        </div>
       </div>
     </>
   );
@@ -1392,7 +1410,7 @@ export default function Staff() {
           ) : activeTab === 'management' ? (
             <div style={{ 
               width: '100%', 
-              maxWidth: '1200px',
+              maxWidth: '1100px',
               margin: '0 auto',
               overflowX: 'auto',
               overflowY: 'visible',
@@ -1520,7 +1538,7 @@ export default function Staff() {
           ) : (
             <div style={{ 
               width: '100%', 
-              maxWidth: '1200px',
+              maxWidth: '1100px',
               margin: '0 auto',
               overflowX: 'auto',
               overflowY: 'visible',

@@ -4,16 +4,22 @@ const { prisma } = require('../lib/prisma');
 const cache = require('../cache');
 const etagMiddleware = require('../middleware/etag-cache');
 
-// Get all orders
+// Get all orders (with pagination)
 router.get('/', etagMiddleware, async (req, res) => {
   try {
+    // Parse pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50; // Default 50 orders per page
+    const skip = (page - 1) * limit;
+    const noPagination = req.query.all === 'true'; // Option to get all orders
+    
     // Use versioned cache key to prevent race conditions
     const version = cache.getVersion('orders');
-    const cacheKey = `orders:${version}:all`;
+    const cacheKey = noPagination ? `orders:${version}:all` : `orders:${version}:page:${page}:${limit}`;
     try {
       const cached = cache.get(cacheKey);
       if (cached) {
-        console.log(`🚀 CACHE HIT! Returning cached orders (version ${version}, instant)`);
+        console.log(`🚀 CACHE HIT! Returning cached orders (version ${version}, instant) - Page ${page}`);
         return res.json(cached);
       }
     } catch (cacheError) {
@@ -21,13 +27,29 @@ router.get('/', etagMiddleware, async (req, res) => {
       // Continue to database query
     }
 
-    console.log('💾 CACHE MISS - Fetching orders from PostgreSQL (slow - Singapore server)...');
+    console.log(`💾 CACHE MISS - Fetching orders from PostgreSQL - Page ${page}...`);
     const startTime = Date.now();
+    
+    // Get total count for pagination
+    const totalCount = await prisma.order.count();
+    
     const orders = await prisma.order.findMany({
-      include: {
+      select: {
+        id: true,
+        status: true,
+        totalCents: true,
+        createdAt: true,
+        userId: true,
+        tableId: true,
         items: {
-          include: {
-            menuItem: true
+          select: {
+            qty: true,
+            priceCents: true,
+            menuItem: {
+              select: {
+                name: true
+              }
+            }
           }
         },
         user: {
@@ -46,9 +68,10 @@ router.get('/', etagMiddleware, async (req, res) => {
       },
       orderBy: {
         createdAt: 'desc'
-      }
+      },
+      ...(noPagination ? {} : { skip, take: limit })
     });
-    console.log(`⚡ Orders query took ${Date.now() - startTime}ms`);
+    console.log(`⚡ Orders query took ${Date.now() - startTime}ms - Fetched ${orders.length} orders`);
 
     // Transform the data to match frontend format
     const transformedOrders = orders.map(order => ({
@@ -80,9 +103,21 @@ router.get('/', etagMiddleware, async (req, res) => {
       tableLabel: order.table?.label
     }));
     
+    // Prepare response with pagination metadata
+    const response = noPagination ? transformedOrders : {
+      items: transformedOrders,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        hasMore: skip + transformedOrders.length < totalCount
+      }
+    };
+    
     // Cache for 2 MINUTES (orders change frequently, but still cache longer)
     try {
-      cache.set(cacheKey, transformedOrders, 120000);
+      cache.set(cacheKey, response, 120000);
     } catch (cacheError) {
       console.error('Cache write error:', cacheError);
       // Continue - data will be returned without caching
@@ -91,7 +126,7 @@ router.get('/', etagMiddleware, async (req, res) => {
     // Allow client caching for 5 seconds
     res.set('Cache-Control', 'public, max-age=5');
 
-    res.json(transformedOrders);
+    res.json(response);
   } catch (error) {
     console.error('Error fetching orders:', error);
     res.status(500).json({ error: 'Failed to fetch orders' });

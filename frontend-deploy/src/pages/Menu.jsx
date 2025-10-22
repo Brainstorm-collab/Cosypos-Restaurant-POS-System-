@@ -102,10 +102,13 @@ export default function Menu() {
       setLoading(true)
       console.log('🔄 Fetching from PostgreSQL...')
       
-      const [itemsData, categoriesData] = await Promise.all([
-        getMenuItems(),
+      const [itemsResponse, categoriesData] = await Promise.all([
+        getMenuItems({ page: 1, limit: 100 }), // Use pagination for faster loading
         getCategories()
       ])
+      
+      // Handle both paginated and non-paginated response
+      const itemsData = itemsResponse.items || itemsResponse
       
       console.log('📊 Received:', itemsData.length, 'items,', categoriesData.length, 'categories')
       

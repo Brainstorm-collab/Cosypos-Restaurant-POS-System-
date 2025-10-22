@@ -277,7 +277,11 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchMenuItems = async () => {
       try {
-        const items = await getMenuItems();
+        const response = await getMenuItems({ page: 1, limit: 50 }); // Use pagination for faster loading
+        
+        // Handle both paginated and non-paginated response
+        const items = response.items || response;
+        
         // Transform to Dashboard format
         const transformedItems = items.map(item => ({
           name: item.name,

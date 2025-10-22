@@ -53,7 +53,8 @@ export default function InventoryQuickEdit({ isOpen, onClose, onUpdate, inventor
   const loadMenuItems = async () => {
     try {
       setLoading(true);
-      const items = await getMenuItems();
+      const response = await getMenuItems({ page: 1, limit: 100 }); // Use pagination for faster loading
+      const items = response.items || response; // Handle both formats
       setMenuItems(items);
       setFilteredItems(items);
     } catch (error) {
