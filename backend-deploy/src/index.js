@@ -18,8 +18,8 @@ const apiLimiter = rateLimit({
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   skip: (req) => {
-    // Skip rate limiting for static files
-    return req.path.startsWith('/uploads/');
+    // Skip rate limiting for static files and OPTIONS requests
+    return req.path.startsWith('/uploads/') || req.method === 'OPTIONS';
   }
 });
 
@@ -28,10 +28,32 @@ const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // Limit each IP to 10 login attempts per 15 minutes
   message: 'Too many authentication attempts, please try again later.',
-  skipSuccessfulRequests: true // Don't count successful requests
+  skipSuccessfulRequests: true, // Don't count successful requests
+  skip: (req) => req.method === 'OPTIONS' // Skip OPTIONS preflight requests
 });
 
-// Apply rate limiting to all API routes
+// CORS headers for all requests - MUST be FIRST before rate limiting
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma, Expires, If-None-Match, ETag');
+  res.setHeader('Access-Control-Allow-Credentials', 'false');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  res.setHeader('Access-Control-Expose-Headers', 'ETag');
+  
+  // Override any restrictive CORS policies
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+  
+  // Handle OPTIONS preflight requests immediately
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
+
+// Apply rate limiting to all API routes (AFTER CORS)
 app.use('/api', apiLimiter);
 
 // Performance middleware
@@ -49,26 +71,6 @@ app.use(compression({
 
 // Image optimization middleware
 app.use(imageOptimizerMiddleware);
-// CORS headers for all requests
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma, Expires, If-None-Match, ETag');
-  res.setHeader('Access-Control-Allow-Credentials', 'false');
-  res.setHeader('Access-Control-Max-Age', '86400');
-  res.setHeader('Access-Control-Expose-Headers', 'ETag');
-  
-  // Override any restrictive CORS policies
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
-  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-  
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-  next();
-});
 
 // Optimize JSON parsing
 app.use(express.json({ limit: '10mb' }));
