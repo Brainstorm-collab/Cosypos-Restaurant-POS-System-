@@ -26,7 +26,7 @@ const apiLimiter = rateLimit({
 // Stricter rate limit for auth endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 login attempts per 15 minutes
+  max: 1000, // Limit each IP to 1000 requests per 15 minutes (relaxed for dev)
   message: 'Too many authentication attempts, please try again later.',
   skipSuccessfulRequests: true, // Don't count successful requests
   skip: (req) => req.method === 'OPTIONS' // Skip OPTIONS preflight requests
@@ -40,12 +40,12 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Credentials', 'false');
   res.setHeader('Access-Control-Max-Age', '86400');
   res.setHeader('Access-Control-Expose-Headers', 'ETag');
-  
+
   // Override any restrictive CORS policies
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
   res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-  
+
   // Handle OPTIONS preflight requests immediately
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -57,7 +57,7 @@ app.use((req, res, next) => {
 app.use('/api', apiLimiter);
 
 // Performance middleware
-app.use(compression({ 
+app.use(compression({
   level: 6, // Balance between compression and speed
   threshold: 1024, // Only compress responses > 1KB
   filter: (req, res) => {
@@ -81,52 +81,52 @@ app.get('/uploads/:folder/:filename', async (req, res) => {
   try {
     const folder = req.params.folder;
     const filename = req.params.filename;
-    
+
     // Security: Validate folder and filename to prevent path traversal
     const allowedFolders = ['menu-items', 'categories', 'profiles'];
     if (!allowedFolders.includes(folder)) {
       return res.status(400).json({ error: 'Invalid folder' });
     }
-    
+
     // Reject path traversal attempts (../ or ..\\ or absolute paths)
     if (folder.includes('..') || folder.includes('/') || folder.includes('\\') ||
-        filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
       console.warn('⚠️ Path traversal attempt detected:', { folder, filename });
       return res.status(400).json({ error: 'Invalid path' });
     }
-    
+
     // Only allow safe filename characters
     const safeFilenameRegex = /^[a-zA-Z0-9._-]+$/;
     if (!safeFilenameRegex.test(filename)) {
       return res.status(400).json({ error: 'Invalid filename' });
     }
-    
+
     // Build the safe path
     const uploadsRoot = path.resolve(__dirname, '../uploads');
     const imagePath = path.join(uploadsRoot, folder, filename);
-    
+
     // Verify the resolved path is within uploads directory (prevent escaping)
     if (!imagePath.startsWith(uploadsRoot)) {
       console.warn('⚠️ Path escape attempt detected:', imagePath);
       return res.status(403).json({ error: 'Access denied' });
     }
-    
+
     // Set CORS headers for images
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
     res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-    
+
     // Set caching headers for static images (1 hour cache)
     res.setHeader('Cache-Control', 'public, max-age=3600, immutable');
-    
+
     // Check if file exists using async file operations
     try {
       const stats = await fs.stat(imagePath);
       if (!stats.isFile()) {
         return res.status(404).json({ error: 'Not a file' });
       }
-      
+
       // Send the file
       res.sendFile(imagePath);
     } catch (statError) {
@@ -146,7 +146,7 @@ app.get('/uploads/:folder/:filename', async (req, res) => {
 // Development-only test endpoints
 if (process.env.NODE_ENV === 'development' || process.env.ENABLE_TEST_ENDPOINTS === 'true') {
   console.log('⚠️ Test endpoints enabled (development mode)');
-  
+
   // Test endpoint to verify CORS headers
   app.get('/test-cors', (req, res) => {
     console.log('Test CORS route hit');
@@ -160,7 +160,7 @@ if (process.env.NODE_ENV === 'development' || process.env.ENABLE_TEST_ENDPOINTS 
     console.log('Test route hit');
     res.json({ message: 'Test route working', timestamp: new Date().toISOString() });
   });
-  
+
   // Test CORS endpoint
   app.get('/api/cors-test', (_req, res) => {
     console.log('CORS test endpoint called');
@@ -172,7 +172,7 @@ if (process.env.NODE_ENV === 'development' || process.env.ENABLE_TEST_ENDPOINTS 
   app.get('/api/deployment-test', (_req, res) => {
     console.log('🚀 Deployment test endpoint called');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.json({ 
+    res.json({
       message: '🎉 DEPLOYMENT TEST SUCCESSFUL!',
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
@@ -188,7 +188,7 @@ if (process.env.NODE_ENV === 'development' || process.env.ENABLE_TEST_ENDPOINTS 
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
     res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-    res.json({ 
+    res.json({
       message: 'Test image endpoint with CORS headers',
       timestamp: new Date().toISOString(),
       headers: {
@@ -246,7 +246,7 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma, Expires, If-None-Match, ETag');
   res.setHeader('Access-Control-Expose-Headers', 'ETag, Content-Length, Content-Type');
-  
+
   next();
 });
 
@@ -274,7 +274,7 @@ app.use('/api/attendance', require('./routes/attendance'));
 console.log('Attendance routes loaded');
 console.log('All routes loaded successfully');
 
-const port = Number(process.env.PORT||4000);
+const port = Number(process.env.PORT || 4000);
 app.listen(port, () => {
-  console.log('API listening on http://localhost:'+port);
+  console.log('API listening on http://localhost:' + port);
 });

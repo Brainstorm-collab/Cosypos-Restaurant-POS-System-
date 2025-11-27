@@ -17,13 +17,13 @@ if (!global.__prisma) {
   // Configure connection pool limits
   // PostgreSQL connection string should include: ?connection_limit=10&pool_timeout=20
   
-  // Connect to database with optimized settings
+  // Connect to database with optimized settings (non-blocking)
   global.__prisma.$connect().then(() => {
     console.log('✅ Database connected with optimized connection pooling');
     console.log('📊 Connection pool: 10 connections, 20s timeout');
   }).catch((err) => {
     console.error('❌ Database connection failed:', err);
-    process.exit(1); // Exit on connection failure for restart
+    console.error('⚠️ Server will continue but database operations will fail');
   });
   
   // Graceful shutdown
